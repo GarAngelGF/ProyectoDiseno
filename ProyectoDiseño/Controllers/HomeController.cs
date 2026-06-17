@@ -1,25 +1,65 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using ProyectoDiseño.Models;
-using System.Diagnostics;
+using ProyectoDiseño.Patrones;
+using ProyectoDiseño.ViewModels;
+using System.Collections.Generic;
 
 namespace ProyectoDiseño.Controllers
 {
     public class HomeController : Controller
     {
-        public IActionResult Index()
+        public IActionResult Index(string rolUsuario) // 'rolUsuario' vendría de la sesión activa
         {
-            return View();
+            var inventario = ObtenerInventario();
+
+            // Filtramos los insumos que requieren alerta usando LINQ
+            var alertas = inventario.FindAll(i => i.CantidadActual < i.StockMinimo);
+
+            var viewModel = new DashboardViewModel
+            {
+                InventarioCompleto = inventario,
+                AlertasStock = alertas
+            };
+
+            // Redirección basada en el rol de la Persona
+            if (rolUsuario == "Cocina")
+            {
+                return View("VistaCocina", viewModel);
+            }
+
+            // Vista por defecto para el Administrador
+            return View("DashboardAdmin", viewModel);
         }
 
-        public IActionResult Privacy()
+        private List<Insumo> ObtenerInventario()
         {
-            return View();
-        }
+            var lista = new List<Insumo>();
+            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
-        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
-        {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+            using (conexion)
+            {
+                conexion.Open();
+                string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo FROM Insumo WHERE Activo = 1";
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
+                {
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            lista.Add(new Insumo
+                            {
+                                IdInsumo = reader.GetInt32(0),
+                                Nombre = reader.GetString(1),
+                                UnidadMedida = reader.GetString(2),
+                                CantidadActual = reader.GetDecimal(3),
+                                StockMinimo = reader.GetDecimal(4)
+                            });
+                        }
+                    }
+                }
+            }
+            return lista;
         }
     }
 }
