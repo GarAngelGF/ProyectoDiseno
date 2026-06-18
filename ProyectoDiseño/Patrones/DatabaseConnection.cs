@@ -1,26 +1,29 @@
 ﻿using Microsoft.Data.SqlClient;
+using System.Data; // Importante: Se requiere para leer el ConnectionState
 
 namespace ProyectoDiseño.Patrones
 {
     public class DatabaseConnection
     {
-        // Variable estática que almacena la única instancia
+        // Variable estática que almacena la única instancia de esta clase
         private static DatabaseConnection _instancia = null;
-
-        // Objeto de bloqueo para garantizar seguridad en hilos (Thread-safe)
         private static readonly object _bloqueo = new object();
-
-        // Cadena de conexión (Idealmente la obtienes de appsettings.json)
         private readonly string _cadenaConexion = "Server=tcp:adminbdnonato26.database.windows.net,1433;Initial Catalog=SICI_ElJardin;Persist Security Info=False;User ID=adminprobd2026;Password=Birriamasters2026#;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-        // Constructor privado para evitar que otras clases usen 'new'
-        private DatabaseConnection() { }
 
-        // Propiedad pública estática para obtener la instancia
+        // 1. SOLUCIÓN: Variable para almacenar LA ÚNICA instancia de SqlConnection
+        private SqlConnection _conexionUnica;
+
+        private DatabaseConnection()
+        {
+            // 2. SOLUCIÓN: La conexión a la BD se crea UNA SOLA VEZ cuando nace el Singleton
+            _conexionUnica = new SqlConnection(_cadenaConexion);
+        }
+
         public static DatabaseConnection Instancia
         {
             get
             {
-                lock (_bloqueo) // Bloquea el hilo para evitar que se creen dos instancias al mismo tiempo
+                lock (_bloqueo)
                 {
                     if (_instancia == null)
                     {
@@ -31,10 +34,16 @@ namespace ProyectoDiseño.Patrones
             }
         }
 
-        // Método para entregar el objeto SqlConnection
+        // 3. SOLUCIÓN: Retorna siempre la misma instancia en lugar de hacer un "new"
         public SqlConnection ObtenerConexion()
         {
-            return new SqlConnection(_cadenaConexion);
+            // Garantizamos que la conexión única esté abierta antes de entregarla a los controladores
+            if (_conexionUnica.State == ConnectionState.Closed)
+            {
+                _conexionUnica.Open();
+            }
+
+            return _conexionUnica;
         }
     }
 }
