@@ -1,0 +1,69 @@
+﻿@model IEnumerable<ProyectoDiseño.Models.Insumo>
+
+@{
+    ViewData["Title"] = "Registrar Movimiento de Almacén";
+}
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-dark text-white p-3">
+                    <h5 class="mb-0 fw-bold">
+                        <i class="bi bi-arrow-left-right me-2"></i>Nueva Transacción de Inventario
+                    </h5>
+                </div>
+                <div class="card-body p-4 bg-light">
+
+                    <form asp-controller="Movimientos" asp-action="RegistrarEgreso" method="post">
+
+                        <input type="hidden" name="idPersona" value="@Context.Session.GetInt32("UsuarioId")" />
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold text-secondary">Seleccionar Insumo / Ingrediente</label>
+                            <select name="idInsumo" class="form-select bg-white" required>
+                                <option value="" disabled selected>-- Elige un insumo disponible --</option>
+                                @foreach (var item in Model)
+                                {
+                                    <option value="@item.IdInsumo">@item.Nombre (@item.CantidadActual @item.UnidadMedida disponibles)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold text-secondary">Tipo de Movimiento</label>
+                            <select name="tipoMovimiento" class="form-select bg-white" required>
+                                <option value="" disabled selected>-- Selecciona la acción --</option>
+                                <option value="Consumo">Consumo de Operación</option>
+                                <option value="Merma">Merma (Desperdicio / Caducidad)</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold text-secondary">Cantidad a Retirar</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-box-seam"></i></span>
+                                <input type="number" step="0.01" min="0.01" name="cantidadARetirar" class="form-control bg-white text-center fw-bold fs-5" placeholder="0.00" required />
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning border-0 rounded-3 py-2 small mb-4 shadow-sm">
+                            <i class="bi bi-shield-fill-exclamation me-1"></i>
+                            <strong>Regla RN-01:</strong> El backend denegará inmediatamente la transacción y revertirá los cambios mediante transacciones SQL si el decremento solicitado supera el inventario físico disponible.
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a asp-controller="Home" asp-action="Dashboard" class="btn btn-outline-secondary px-4">
+                                Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-warning px-4 fw-bold">
+                                Procesar Transacción
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

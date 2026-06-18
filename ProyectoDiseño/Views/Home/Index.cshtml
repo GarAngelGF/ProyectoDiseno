@@ -1,8 +1,44 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Inicio de Sesión";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="row justify-content-center align-items-center" style="min-height: 70vh;">
+    <div class="col-md-5">
+        <div class="card shadow border-0">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <h3 class="fw-bold text-dark">SICI - El Jardín</h3>
+                    <p class="text-muted">Control de Inventario y Almacén</p>
+                </div>
+
+                @if (ViewBag.Error != null)
+                {
+                    <div class="alert alert-danger py-2 text-center small mb-3" role="alert">
+                        <i class="bi bi-exclamation-circle-fill me-2"></i> @ViewBag.Error
+                    </div>
+                }
+
+                <form asp-controller="Home" asp-action="Login" method="post">
+                    <div class="mb-3">
+                        <label class="form-label text-secondary fw-semibold">Usuario</label>
+                        <input type="text" name="usuario" class="form-control form-control-lg bg-light" placeholder="Introduce tu usuario" required autocomplete="off" />
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label text-secondary fw-semibold">Contraseña</label>
+                        <input type="password" name="contrasena" class="form-control form-control-lg bg-light" placeholder="••••••••" required />
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-dark btn-lg fw-bold shadow-sm">
+                            Ingresar al Sistema
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer bg-light py-3 text-center border-0">
+                <small class="text-muted">Las restricciones de acceso se aplican automáticamente según tu rol de contratación.</small>
+            </div>
+        </div>
+    </div>
 </div>

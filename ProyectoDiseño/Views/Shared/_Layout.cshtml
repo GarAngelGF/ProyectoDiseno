@@ -1,31 +1,65 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+﻿@using Microsoft.AspNetCore.Http
+<!DOCTYPE html>
+<html lang="es">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - ProyectoDiseño</title>
-    <script type="importmap"></script>
+    <title>@ViewData["Title"] - SICI El Jardín</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" />
     <link rel="stylesheet" href="~/ProyectoDiseño.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
     <header>
         <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
             <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">ProyectoDiseño</a>
+                <a class="navbar-brand fw-bold text-dark" asp-area="" asp-controller="Home" asp-action="Index">SICI - El Jardín</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
                     <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
+                        @if (!string.IsNullOrEmpty(Context.Session.GetString("UsuarioRol")))
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Dashboard">Panel Principal</a>
+                            </li>
+
+                            @if (Context.Session.GetString("UsuarioRol") == "Administrador")
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link text-dark" asp-area="" asp-controller="Insumos" asp-action="Index">Catálogo Insumos</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link text-dark" asp-area="" asp-controller="Movimientos" asp-action="RegistrarTransaccion">Nueva Transacción</a>
+                                </li>
+                            }
+                        }
+                    </ul>
+
+                    <ul class="navbar-nav ms-auto align-items-center">
+                        @if (!string.IsNullOrEmpty(Context.Session.GetString("UsuarioRol")))
+                        {
+                            <li class="nav-item me-3">
+                                <span class="text-secondary small">
+                                    Usuario: <strong class="text-dark">@Context.Session.GetString("UsuarioNombre")</strong>
+                                    <span class="badge bg-dark ms-1">@Context.Session.GetString("UsuarioRol")</span>
+                                </span>
+                            </li>
+                            <li class="nav-item">
+                                <a class="btn btn-sm btn-outline-danger fw-bold" asp-area="" asp-controller="Home" asp-action="Logout">
+                                    <i class="bi bi-box-arrow-right"></i> Salir
+                                </a>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="nav-item">
+                                <span class="text-muted small"><i class="bi bi-lock-fill"></i> Acceso Restringido</span>
+                            </li>
+                        }
                     </ul>
                 </div>
             </div>
@@ -37,9 +71,9 @@
         </main>
     </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - ProyectoDiseño - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+    <footer class="border-top footer text-muted bg-light position-absolute bottom-0 w-100 py-3">
+        <div class="container text-center">
+            &copy; @DateTime.Now.Year - SICI El Jardín - Sistema de Control de Inventarios
         </div>
     </footer>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>

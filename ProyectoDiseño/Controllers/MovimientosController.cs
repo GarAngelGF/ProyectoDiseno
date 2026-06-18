@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using ProyectoDiseño.Patrones;
 using ProyectoDiseño.Models;
 using System;
+
 namespace ProyectoDiseño.Controllers
 {
     public class MovimientosController : Controller
@@ -11,11 +12,14 @@ namespace ProyectoDiseño.Controllers
         [HttpPost]
         public IActionResult RegistrarEgreso(int idInsumo, int idPersona, decimal cantidadARetirar, string tipoMovimiento)
         {
-            // Validamos que el tipo de movimiento sea correcto para un egreso
+            // Determinamos el rol dinámicamente según el flujo para la redirección final
+            string rolRetorno = (tipoMovimiento == "Consumo") ? "Cocina" : "Administrador";
+
             if (tipoMovimiento != "Consumo" && tipoMovimiento != "Merma")
             {
                 TempData["Error"] = "Tipo de movimiento no válido.";
-                return RedirectToAction("Index");
+                // CORREGIDO: Redirige al Dashboard de la Home
+                return RedirectToAction("Index", "Home", new { rolUsuario = rolRetorno });
             }
 
             SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
@@ -23,8 +27,6 @@ namespace ProyectoDiseño.Controllers
             using (conexion)
             {
                 conexion.Open();
-
-                // Iniciamos una transacción SQL para asegurar la integridad de los datos de stock
                 SqlTransaction transaccion = conexion.BeginTransaction();
 
                 try
@@ -48,10 +50,10 @@ namespace ProyectoDiseño.Controllers
                     // 2. Validación de la Regla de Negocio RN-01 (Interrupción de flujo)
                     if (cantidadARetirar > stockActual)
                     {
-                        // Se interrumpe el flujo y no se realiza la operación 
                         transaccion.Rollback();
                         TempData["Error"] = $"Operación denegada: Intenta retirar {cantidadARetirar} pero solo hay {stockActual} en existencia.";
-                        return RedirectToAction("Index"); // Devuelve a la vista con el mensaje de error
+                        // CORREGIDO: Redirige al Dashboard correspondiente conservando el mensaje de error
+                        return RedirectToAction("Index", "Home", new { rolUsuario = rolRetorno });
                     }
 
                     // 3. Descontar las unidades del inventario
@@ -69,13 +71,12 @@ namespace ProyectoDiseño.Controllers
                     using (SqlCommand cmdHistorial = new SqlCommand(queryHistorial, conexion, transaccion))
                     {
                         cmdHistorial.Parameters.AddWithValue("@IdInsumo", idInsumo);
-                        cmdHistorial.Parameters.AddWithValue("@IdPersona", idPersona); // El ID del Administrador o Personal de Cocina
+                        cmdHistorial.Parameters.AddWithValue("@IdPersona", idPersona);
                         cmdHistorial.Parameters.AddWithValue("@TipoMovimiento", tipoMovimiento);
                         cmdHistorial.Parameters.AddWithValue("@Cantidad", cantidadARetirar);
                         cmdHistorial.ExecuteNonQuery();
                     }
 
-                    // Confirmamos la transacción
                     transaccion.Commit();
                     TempData["Exito"] = "Movimiento registrado y stock actualizado correctamente.";
                 }
@@ -86,7 +87,8 @@ namespace ProyectoDiseño.Controllers
                 }
             }
 
-            return RedirectToAction("Index"); // Redirige al panel de cocina o inventario
+            // CORREGIDO: Regresa de forma segura al panel del usuario con los resultados actualizados
+            return RedirectToAction("Index", "Home", new { rolUsuario = rolRetorno });
         }
     }
 }

@@ -1,0 +1,75 @@
+﻿@model IEnumerable<ProyectoDiseño.Models.Insumo>
+
+@{
+    ViewData["Title"] = "Catálogo de Insumos";
+}
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" class="bi bi-journal-text me-2" viewBox="0 0 16 16">
+                <path d="M5 10.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5zm0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z" />
+                <path d="M3 0h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-1h1v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v1H1V2a2 2 0 0 1 2-2z" />
+                <path d="M1 5v-.5a.5.5 0 0 1 1 0V5h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1H1zm0 3v-.5a.5.5 0 0 1 1 0V8h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1H1zm0 3v-.5a.5.5 0 0 1 1 0v.5h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1H1z" />
+            </svg>
+            Catálogo Completo de Insumos
+        </h2>
+        <div>
+            <a asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary shadow-sm me-2">
+                Ir al Dashboard
+            </a>
+            <a asp-action="Crear" class="btn btn-primary shadow-sm">
+                + Nuevo Insumo
+            </a>
+        </div>
+    </div>
+
+    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> Operación realizada correctamente. El catálogo está actualizado.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0 align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="text-center">ID</th>
+                            <th>Nombre del Producto</th>
+                            <th>Unidad</th>
+                            <th class="text-center">Existencia</th>
+                            <th class="text-center">Stock Mínimo</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model != null && Model.Any())
+                        {
+                            @foreach (var item in Model)
+                            {
+                                <tr>
+                                    <td class="text-center">@item.IdInsumo</td>
+                                    <td class="fw-bold text-primary">@item.Nombre</td>
+                                    <td>@item.UnidadMedida</td>
+                                    <td class="text-center">@item.CantidadActual</td>
+                                    <td class="text-center">@item.StockMinimo</td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-outline-dark" title="Editar">Editar</button>
+                                        <button class="btn btn-sm btn-outline-danger" title="Dar de baja">Eliminar</button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">No hay insumos registrados en el catálogo.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

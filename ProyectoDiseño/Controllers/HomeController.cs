@@ -3,17 +3,89 @@ using Microsoft.Data.SqlClient;
 using ProyectoDiseño.Models;
 using ProyectoDiseño.Patrones;
 using ProyectoDiseño.ViewModels;
+using System;
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Http; // Necesario para el manejo de sesiones
 
 namespace ProyectoDiseño.Controllers
 {
     public class HomeController : Controller
     {
-        public IActionResult Index(string rolUsuario) // 'rolUsuario' vendría de la sesión activa
+        // GET: Home/Index (Pantalla de Inicio de Sesión)
+        [HttpGet]
+        public IActionResult Index()
         {
-            var inventario = ObtenerInventario();
+            // Si el usuario ya está logueado, lo mandamos directo a su Dashboard
+            if (!string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioRol")))
+            {
+                return RedirectToAction("Dashboard");
+            }
+            return View();
+        }
 
-            // Filtramos los insumos que requieren alerta usando LINQ
+        // POST: Home/Login (Procesa el formulario contra la tabla Persona)
+        [HttpPost]
+        public IActionResult Login(string usuario, string contrasena)
+        {
+            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
+
+            try
+            {
+                using (conexion)
+                {
+                    conexion.Open();
+                    // Consulta segura para verificar las credenciales de la Persona
+                    string query = @"SELECT IdPersona, NombreCompleto, Rol 
+                                     FROM Persona 
+                                     WHERE Usuario = @Usuario AND ContrasenaHash = @Contrasena AND Activo = 1";
+
+                    using (SqlCommand cmd = new SqlCommand(query, conexion))
+                    {
+                        cmd.Parameters.AddWithValue("@Usuario", usuario);
+                        cmd.Parameters.AddWithValue("@Contrasena", contrasena);
+
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                // GUARDAR EN SESIÓN LOS DATOS DEL REGISTRO ENCONTRADO
+                                HttpContext.Session.SetInt32("UsuarioId", reader.GetInt32(0));
+                                HttpContext.Session.SetString("UsuarioNombre", reader.GetString(1));
+                                HttpContext.Session.SetString("UsuarioRol", reader.GetString(2));
+
+                                return RedirectToAction("Dashboard");
+                            }
+                            else
+                            {
+                                // Mensaje temporal si los datos no coinciden
+                                ViewBag.Error = "Usuario o contraseña incorrectos, o cuenta inactiva.";
+                                return View("Index");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ViewBag.Error = "Error crítico de base de datos: " + ex.Message;
+                return View("Index");
+            }
+        }
+
+        // GET: Home/Dashboard (Aplica restricciones de Rol en el Programa)
+        [HttpGet]
+        public IActionResult Dashboard()
+        {
+            // Recuperamos el rol guardado en la sesión
+            string rolUsuario = HttpContext.Session.GetString("UsuarioRol");
+
+            // Restricción: Si no ha iniciado sesión, se bloquea el acceso
+            if (string.IsNullOrEmpty(rolUsuario))
+            {
+                return RedirectToAction("Index");
+            }
+
+            var inventario = ObtenerInventario();
             var alertas = inventario.FindAll(i => i.CantidadActual < i.StockMinimo);
 
             var viewModel = new DashboardViewModel
@@ -22,14 +94,25 @@ namespace ProyectoDiseño.Controllers
                 AlertasStock = alertas
             };
 
-            // Redirección basada en el rol de la Persona
+            // CONTROL DE FLUJO Y RESTRICCIONES SEGÚN EL ROL DE LA TABLA PERSONA
             if (rolUsuario == "Cocina")
             {
                 return View("VistaCocina", viewModel);
             }
+            else if (rolUsuario == "Administrador")
+            {
+                return View("DashboardAdmin", viewModel);
+            }
 
-            // Vista por defecto para el Administrador
-            return View("DashboardAdmin", viewModel);
+            // Si tiene un rol no identificado, limpia y expulsa
+            return RedirectToAction("Logout");
+        }
+
+        // GET: Home/Logout
+        public IActionResult Logout()
+        {
+            HttpContext.Session.Clear(); // Destruye la sesión activa
+            return RedirectToAction("Index");
         }
 
         private List<Insumo> ObtenerInventario()

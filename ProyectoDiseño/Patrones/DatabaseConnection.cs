@@ -11,7 +11,7 @@ namespace ProyectoDiseño.Patrones
         private static readonly object _bloqueo = new object();
 
         // Cadena de conexión (Idealmente la obtienes de appsettings.json)
-        private readonly string _cadenaConexion = "Server=TU_SERVIDOR;Database=SICI_ElJardin;Trusted_Connection=True;MultipleActiveResultSets=true;Encrypt=False;";
+        private readonly string _cadenaConexion = "Server=adminbdnonato26.database.windows.net;Database=SICI_ElJardin;Trusted_Connection=True;MultipleActiveResultSets=true;Encrypt=False;";
 
         // Constructor privado para evitar que otras clases usen 'new'
         private DatabaseConnection() { }

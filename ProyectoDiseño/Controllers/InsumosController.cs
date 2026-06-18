@@ -2,26 +2,65 @@
 using Microsoft.Data.SqlClient;
 using ProyectoDiseño.Patrones;
 using ProyectoDiseño.Models;
+using System;
+using System.Collections.Generic;
 
 namespace ProyectoDiseño.Controllers
 {
     public class InsumosController : Controller
     {
+        // ==========================================
+        // AGREGADO: GET: Insumos (Catálogo)
+        // ==========================================
+        [HttpGet]
+        public IActionResult Index()
+        {
+            var lista = new List<Insumo>();
+            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
+
+            try
+            {
+                using (conexion)
+                {
+                    conexion.Open();
+                    string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo FROM Insumo WHERE Activo = 1";
+                    using (SqlCommand cmd = new SqlCommand(query, conexion))
+                    {
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                lista.Add(new Insumo
+                                {
+                                    IdInsumo = reader.GetInt32(0),
+                                    Nombre = reader.GetString(1),
+                                    UnidadMedida = reader.GetString(2),
+                                    CantidadActual = reader.GetDecimal(3),
+                                    StockMinimo = reader.GetDecimal(4)
+                                });
+                            }
+                        }
+                    }
+                }
+                return View(lista);
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = "Error al cargar el catálogo: " + ex.Message;
+                return RedirectToAction("Index", "Home");
+            }
+        }
+
         // POST: Insumos/ClonarInsumo
         [HttpPost]
         public IActionResult ClonarInsumo(int idInsumoBase, string nuevoNombre, decimal nuevaCantidad)
         {
             try
             {
-                // 1. Obtener el insumo original que servirá de plantilla (Simulado desde BD)
                 Insumo insumoBase = ObtenerInsumoPorId(idInsumoBase);
-
                 if (insumoBase == null) return NotFound();
 
-                // 2. Uso de PATRÓN PROTOTYPE: Clonamos y asignamos nuevos valores
                 Insumo nuevoInsumo = insumoBase.Clonar(nuevoNombre, nuevaCantidad);
-
-                // 3. Uso de PATRÓN SINGLETON: Guardamos en BD con la instancia única
                 SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
                 using (conexion)
@@ -41,20 +80,16 @@ namespace ProyectoDiseño.Controllers
                     }
                 }
 
-                return RedirectToAction("Index"); // Regresa al catálogo actualizado
+                return RedirectToAction("Index"); // Ahora sí funcionará
             }
             catch (Exception ex)
             {
-                // Manejo de errores 
                 return View("Error");
             }
         }
 
-        // Método auxiliar simulado para obtener el insumo base de la BD
         private Insumo ObtenerInsumoPorId(int id)
         {
-            // Aquí iría la consulta SELECT a la base de datos usando también el Singleton
-            // Para el ejemplo retornamos un objeto instanciado
             return new Insumo
             {
                 IdInsumo = id,
@@ -64,6 +99,7 @@ namespace ProyectoDiseño.Controllers
                 StockMinimo = 5
             };
         }
+
         // GET: Insumos/Crear
         public IActionResult Crear()
         {
@@ -74,10 +110,8 @@ namespace ProyectoDiseño.Controllers
         [HttpPost]
         public IActionResult Crear(Insumo insumo)
         {
-            // Validación de la Regla de Negocio RN-02
             if (insumo.StockMinimo <= 0)
             {
-                // Agregamos un error al modelo para que la vista lo muestre
                 ModelState.AddModelError("StockMinimo", "El stock de seguridad mínimo debe ser un valor numérico superior a cero.");
                 return View(insumo);
             }
@@ -86,7 +120,6 @@ namespace ProyectoDiseño.Controllers
             {
                 try
                 {
-                    // Uso de la conexión centralizada desde tu carpeta Patrones
                     SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
                     using (conexion)
                     {
@@ -101,10 +134,10 @@ namespace ProyectoDiseño.Controllers
                             cmd.Parameters.AddWithValue("@CantidadActual", insumo.CantidadActual);
                             cmd.Parameters.AddWithValue("@StockMinimo", insumo.StockMinimo);
 
-                            cmd.ExecuteNonQuery(); // La ejecución pura en ADO.NET garantiza respuesta en < 2 segundos
+                            cmd.ExecuteNonQuery();
                         }
                     }
-                    return RedirectToAction("Index"); // Redirige al catálogo
+                    return RedirectToAction("Index"); // Ahora sí funcionará
                 }
                 catch (Exception ex)
                 {
