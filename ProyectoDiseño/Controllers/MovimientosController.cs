@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using ProyectoDiseño.Patrones;
 using ProyectoDiseño.Models;
 using System;
+using Microsoft.AspNetCore.Http;
 
 namespace ProyectoDiseño.Controllers
 {
@@ -12,26 +13,45 @@ namespace ProyectoDiseño.Controllers
         [HttpPost]
         public IActionResult RegistrarEgreso(int idInsumo, int idPersona, decimal cantidadARetirar, string tipoMovimiento)
         {
-            // Determinamos el rol dinámicamente según el flujo para la redirección final
-            string rolRetorno = (tipoMovimiento == "Consumo") ? "Cocina" : "Administrador";
-
-            if (tipoMovimiento != "Consumo" && tipoMovimiento != "Merma")
+            // Validar que el tipo de movimiento corresponda a las reglas del negocio (RF-02)
+            if (tipoMovimiento != "Consumo" && tipoMovimiento != "Merma" && tipoMovimiento != "Entrada")
             {
                 TempData["Error"] = "Tipo de movimiento no válido.";
-                // CORREGIDO: Redirige al Dashboard de la Home
-                return RedirectToAction("Index", "Home", new { rolUsuario = rolRetorno });
+                return RedirectToAction("Dashboard", "Home");
+            }
+
+            // Si el ID de la persona viene en 0 o vacío por alguna desincronización del cliente,
+            // intentamos recuperarlo directamente de la sesión activa en el servidor
+            if (idPersona <= 0)
+            {
+                idPersona = HttpContext.Session.GetInt32("UsuarioId") ?? 0;
+                if (idPersona == 0)
+                {
+                    TempData["Error"] = "Error de autenticación: No se pudo identificar al usuario que registra el movimiento.";
+                    return RedirectToAction("Index", "Home");
+                }
             }
 
             SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
             using (conexion)
             {
-                conexion.Open();
+                try
+                {
+                    conexion.Open();
+                }
+                catch (Exception ex)
+                {
+                    TempData["Error"] = "Error de conexión con el servidor de datos: " + ex.Message;
+                    return RedirectToAction("Dashboard", "Home");
+                }
+
+                // Iniciamos una transacción SQL explícita para asegurar la consistencia atómica (RNF-01)
                 SqlTransaction transaccion = conexion.BeginTransaction();
 
                 try
                 {
-                    // 1. Obtener la cantidad actual del insumo
+                    // 1. Consultar el estado y stock físico actual del insumo en el almacén
                     decimal stockActual = 0;
                     string queryCheck = "SELECT CantidadActual FROM Insumo WHERE IdInsumo = @IdInsumo AND Activo = 1";
 
@@ -42,32 +62,45 @@ namespace ProyectoDiseño.Controllers
 
                         if (resultado == null)
                         {
-                            throw new Exception("El insumo no existe o está inactivo.");
+                            throw new Exception("El insumo seleccionado no existe en el catálogo o se encuentra inactivo.");
                         }
                         stockActual = Convert.ToDecimal(resultado);
                     }
 
-                    // 2. Validación de la Regla de Negocio RN-01 (Interrupción de flujo)
-                    if (cantidadARetirar > stockActual)
+                    // 2. Determinar el sentido aritmético de la operación e interceptar flujos inválidos
+                    string queryUpdate = "";
+
+                    if (tipoMovimiento == "Entrada")
                     {
-                        transaccion.Rollback();
-                        TempData["Error"] = $"Operación denegada: Intenta retirar {cantidadARetirar} pero solo hay {stockActual} en existencia.";
-                        // CORREGIDO: Redirige al Dashboard correspondiente conservando el mensaje de error
-                        return RedirectToAction("Index", "Home", new { rolUsuario = rolRetorno });
+                        // Incremento de stock por concepto de compras de mercancía
+                        queryUpdate = "UPDATE Insumo SET CantidadActual = CantidadActual + @Cantidad, FechaUltimaActualizacion = GETDATE() WHERE IdInsumo = @IdInsumo";
+                    }
+                    else
+                    {
+                        // Validación estricta de la Regla de Negocio RN-01 (Prevenir inventario negativo)
+                        if (cantidadARetirar > stockActual)
+                        {
+                            transaccion.Rollback();
+                            TempData["Error"] = $"Operación denegada (RN-01): Intenta retirar {cantidadARetirar} unidades de un stock disponible de {stockActual}.";
+                            return RedirectToAction("Dashboard", "Home");
+                        }
+
+                        // Decremento de stock por consumo operativo o pérdidas por merma
+                        queryUpdate = "UPDATE Insumo SET CantidadActual = CantidadActual - @Cantidad, FechaUltimaActualizacion = GETDATE() WHERE IdInsumo = @IdInsumo";
                     }
 
-                    // 3. Descontar las unidades del inventario
-                    string queryUpdate = "UPDATE Insumo SET CantidadActual = CantidadActual - @Cantidad WHERE IdInsumo = @IdInsumo";
+                    // 3. Ejecutar la actualización directa sobre el registro de existencias
                     using (SqlCommand cmdUpdate = new SqlCommand(queryUpdate, conexion, transaccion))
                     {
                         cmdUpdate.Parameters.AddWithValue("@Cantidad", cantidadARetirar);
                         cmdUpdate.Parameters.AddWithValue("@IdInsumo", idInsumo);
-                        cmdUpdate.ExecuteNonQuery();
+                        cmdUpdate.ExecuteNonQuery(); // Ejecución directa en ADO.NET para garantizar respuesta < 2 segundos
                     }
 
-                    // 4. Registrar el historial asociando a la clase Persona
+                    // 4. Persistir la traza de auditoría en el historial transaccional enlazando a la Persona
                     string queryHistorial = @"INSERT INTO MovimientoInventario (IdInsumo, IdPersona, TipoMovimiento, Cantidad, FechaMovimiento) 
                                               VALUES (@IdInsumo, @IdPersona, @TipoMovimiento, @Cantidad, GETDATE())";
+
                     using (SqlCommand cmdHistorial = new SqlCommand(queryHistorial, conexion, transaccion))
                     {
                         cmdHistorial.Parameters.AddWithValue("@IdInsumo", idInsumo);
@@ -77,18 +110,20 @@ namespace ProyectoDiseño.Controllers
                         cmdHistorial.ExecuteNonQuery();
                     }
 
+                    // Confirmación definitiva si todas las instrucciones previas se ejecutaron con éxito
                     transaccion.Commit();
-                    TempData["Exito"] = "Movimiento registrado y stock actualizado correctamente.";
+                    TempData["Exito"] = $"Movimiento de tipo '{tipoMovimiento}' procesado y stock actualizado correctamente.";
                 }
                 catch (Exception ex)
                 {
+                    // Ante cualquier excepción imprevista, se deshacen las operaciones intermedias automáticamente
                     transaccion.Rollback();
-                    TempData["Error"] = "Ocurrió un error en el servidor: " + ex.Message;
+                    TempData["Error"] = "Error interno en el procesamiento del movimiento: " + ex.Message;
                 }
             }
 
-            // CORREGIDO: Regresa de forma segura al panel del usuario con los resultados actualizados
-            return RedirectToAction("Index", "Home", new { rolUsuario = rolRetorno });
+            // Redirección segura al panel unificado controlado por la sesión del Home
+            return RedirectToAction("Dashboard", "Home");
         }
     }
 }

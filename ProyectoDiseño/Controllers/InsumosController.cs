@@ -146,5 +146,86 @@ namespace ProyectoDiseño.Controllers
             }
             return View(insumo);
         }
+        // GET: Insumos/Editar/5
+        [HttpGet]
+        public IActionResult Editar(int id)
+        {
+            Insumo insumo = null;
+            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
+            using (conexion)
+            {
+                conexion.Open();
+                string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo, Activo FROM Insumo WHERE IdInsumo = @IdInsumo";
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
+                {
+                    cmd.Parameters.AddWithValue("@IdInsumo", id);
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            insumo = new Insumo
+                            {
+                                IdInsumo = reader.GetInt32(0),
+                                Nombre = reader.GetString(1),
+                                UnidadMedida = reader.GetString(2),
+                                CantidadActual = reader.GetDecimal(3),
+                                StockMinimo = reader.GetDecimal(4),
+                                Activo = reader.GetBoolean(5)
+                            };
+                        }
+                    }
+                }
+            }
+            if (insumo == null) return NotFound();
+            return View(insumo);
+        }
+
+        // POST: Insumos/Editar
+        [HttpPost]
+        public IActionResult Editar(Insumo insumo)
+        {
+            if (insumo.StockMinimo <= 0)
+            {
+                ModelState.AddModelError("StockMinimo", "El stock mínimo debe ser mayor a cero.");
+                return View(insumo);
+            }
+
+            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
+            using (conexion)
+            {
+                conexion.Open();
+                string query = @"UPDATE Insumo SET Nombre = @Nombre, UnidadMedida = @UnidadMedida, 
+                                 StockMinimo = @StockMinimo, Activo = @Activo WHERE IdInsumo = @IdInsumo";
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
+                {
+                    cmd.Parameters.AddWithValue("@Nombre", insumo.Nombre);
+                    cmd.Parameters.AddWithValue("@UnidadMedida", insumo.UnidadMedida);
+                    cmd.Parameters.AddWithValue("@StockMinimo", insumo.StockMinimo);
+                    cmd.Parameters.AddWithValue("@Activo", insumo.Activo);
+                    cmd.Parameters.AddWithValue("@IdInsumo", insumo.IdInsumo);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            return RedirectToAction("Index");
+        }
+
+        // POST: Insumos/Eliminar (Baja Lógica)
+        [HttpPost]
+        public IActionResult Eliminar(int idInsumo)
+        {
+            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
+            using (conexion)
+            {
+                conexion.Open();
+                // Solo actualiza el campo Activo a 0 (False)
+                string query = "UPDATE Insumo SET Activo = 0 WHERE IdInsumo = @IdInsumo";
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
+                {
+                    cmd.Parameters.AddWithValue("@IdInsumo", idInsumo);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            return RedirectToAction("Index");
+        }
     }
 }
