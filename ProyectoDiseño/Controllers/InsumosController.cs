@@ -4,15 +4,30 @@ using ProyectoDiseño.Patrones;
 using ProyectoDiseño.Models;
 using System;
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Http; // IMPORTANTE: Necesario para el manejo de sesiones
 
 namespace ProyectoDiseño.Controllers
 {
     public class InsumosController : Controller
     {
+        // Método privado auxiliar para verificar si el usuario es Administrador
+        private bool ValidarRolAdministrador()
+        {
+            string rolUsuario = HttpContext.Session.GetString("UsuarioRol");
+            return !string.IsNullOrEmpty(rolUsuario) && rolUsuario == "Administrador";
+        }
+
         // GET: Insumos (Catálogo General)
         [HttpGet]
         public IActionResult Index()
         {
+            // SOLUCIÓN PUNTO 1: Validación de acceso
+            if (!ValidarRolAdministrador())
+            {
+                TempData["Error"] = "Acceso denegado. Esta sección es exclusiva para el Administrador.";
+                return RedirectToAction("Dashboard", "Home");
+            }
+
             var lista = new List<Insumo>();
             SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
@@ -49,17 +64,18 @@ namespace ProyectoDiseño.Controllers
             }
         }
 
-        // CORREGIDO - POST: Insumos/ClonarInsumo (Uso del Patrón Prototype)
+        // POST: Insumos/ClonarInsumo
         [HttpPost]
         public IActionResult ClonarInsumo(int idInsumoBase, string nuevoNombre, decimal nuevaCantidad)
         {
+            // SOLUCIÓN PUNTO 1: Validación de acceso
+            if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
+
             try
             {
-                // Se obtiene el insumo real de la base de datos para usarlo como prototipo de plantilla
                 Insumo insumoBase = ObtenerInsumoPorId(idInsumoBase);
                 if (insumoBase == null) return NotFound();
 
-                // Clonación del objeto base heredando UnidadMedida y StockMinimo automáticamente
                 Insumo nuevoInsumo = insumoBase.Clonar(nuevoNombre, nuevaCantidad);
 
                 SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
@@ -91,7 +107,6 @@ namespace ProyectoDiseño.Controllers
             }
         }
 
-        // CORREGIDO: Consulta real con ADO.NET utilizando la conexión centralizada del Singleton
         private Insumo ObtenerInsumoPorId(int id)
         {
             Insumo insumo = null;
@@ -127,6 +142,9 @@ namespace ProyectoDiseño.Controllers
         // GET: Insumos/Crear
         public IActionResult Crear()
         {
+            // SOLUCIÓN PUNTO 1: Validación de acceso
+            if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
+
             return View();
         }
 
@@ -134,6 +152,9 @@ namespace ProyectoDiseño.Controllers
         [HttpPost]
         public IActionResult Crear(Insumo insumo)
         {
+            // SOLUCIÓN PUNTO 1: Validación de acceso
+            if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
+
             if (insumo.StockMinimo <= 0)
             {
                 ModelState.AddModelError("StockMinimo", "El stock de seguridad mínimo debe ser un valor numérico superior a cero.");
@@ -175,6 +196,9 @@ namespace ProyectoDiseño.Controllers
         [HttpGet]
         public IActionResult Editar(int id)
         {
+            // SOLUCIÓN PUNTO 1: Validación de acceso
+            if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
+
             Insumo insumo = ObtenerInsumoPorId(id);
             if (insumo == null) return NotFound();
             return View(insumo);
@@ -184,6 +208,9 @@ namespace ProyectoDiseño.Controllers
         [HttpPost]
         public IActionResult Editar(Insumo insumo)
         {
+            // SOLUCIÓN PUNTO 1: Validación de acceso
+            if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
+
             if (insumo.StockMinimo <= 0)
             {
                 ModelState.AddModelError("StockMinimo", "El stock mínimo debe ser mayor a cero.");
@@ -217,10 +244,13 @@ namespace ProyectoDiseño.Controllers
             }
         }
 
-        // POST: Insumos/Eliminar (Baja Lógica CRUD - RF-01)
+        // POST: Insumos/Eliminar (Baja Lógica CRUD)
         [HttpPost]
         public IActionResult Eliminar(int idInsumo)
         {
+            // SOLUCIÓN PUNTO 1: Validación de acceso
+            if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
+
             try
             {
                 SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
