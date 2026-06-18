@@ -4,13 +4,13 @@ using ProyectoDiseño.Patrones;
 using ProyectoDiseño.Models;
 using System;
 using System.Collections.Generic;
-using Microsoft.AspNetCore.Http; // Control de sesiones y seguridad
+using Microsoft.AspNetCore.Http;
 
 namespace ProyectoDiseño.Controllers
 {
     public class InsumosController : Controller
     {
-        // CORRECCIÓN: Método de control interno para restringir accesos directos por URL
+        // Método de control interno para restringir accesos directos por URL
         private bool ValidarRolAdministrador()
         {
             string rolUsuario = HttpContext.Session.GetString("UsuarioRol");
@@ -21,7 +21,6 @@ namespace ProyectoDiseño.Controllers
         [HttpGet]
         public IActionResult Index()
         {
-            // CORRECCIÓN: Validación de roles en controladores secundarios
             if (!ValidarRolAdministrador())
             {
                 TempData["Error"] = "Acceso denegado. Módulo exclusivo para el rol Administrador.";
@@ -60,7 +59,7 @@ namespace ProyectoDiseño.Controllers
             }
         }
 
-        // POST: Insumos/ClonarInsumo (Uso del Patrón Prototype)
+        // POST: Insumos/ClonarInsumo (Patrón Prototype)
         [HttpPost]
         public IActionResult ClonarInsumo(int idInsumoBase, string nuevoNombre, decimal nuevaCantidad)
         {
@@ -71,7 +70,6 @@ namespace ProyectoDiseño.Controllers
                 Insumo insumoBase = ObtenerInsumoPorId(idInsumoBase);
                 if (insumoBase == null) return NotFound();
 
-                // Clonación mediante Prototype heredando UnidadMedida y StockMinimo automáticamente
                 Insumo nuevoInsumo = insumoBase.Clonar(nuevoNombre, nuevaCantidad);
 
                 SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
@@ -220,9 +218,24 @@ namespace ProyectoDiseño.Controllers
             }
         }
 
+        // =========================================================================
+        // SOLUCIÓN AL ERROR 404: ACCIÓN GET PARA MOSTRAR LA VISTA DE CONFIRMACIÓN
+        // =========================================================================
+        // GET: Insumos/Eliminar/5
+        [HttpGet]
+        public IActionResult Eliminar(int id)
+        {
+            if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
+
+            Insumo insumo = ObtenerInsumoPorId(id);
+            if (insumo == null) return NotFound();
+
+            return View(insumo);
+        }
+
         // POST: Insumos/Eliminar (Baja Lógica CRUD)
         [HttpPost]
-        public IActionResult Eliminar(int idInsumo)
+        public IActionResult Eliminar(int idInsumo, IFormCollection collection)
         {
             if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
 
@@ -235,6 +248,7 @@ namespace ProyectoDiseño.Controllers
                     cmd.Parameters.AddWithValue("@IdInsumo", idInsumo);
                     cmd.ExecuteNonQuery();
                 }
+                TempData["Exito"] = "Insumo dado de baja correctamente del catálogo.";
                 return RedirectToAction("Index");
             }
             catch (Exception ex)
