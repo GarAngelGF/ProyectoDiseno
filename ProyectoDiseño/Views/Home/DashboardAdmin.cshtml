@@ -1,109 +1,169 @@
 ﻿@model ProyectoDiseño.ViewModels.DashboardViewModel
 
 @{
-    ViewData["Title"] = "Dashboard Administrador";
+    ViewData["Title"] = "Panel de Administración - El Jardín";
 }
 
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Panel de Control - Administrador</h2>
-        <a asp-controller="Insumos" asp-action="Crear" class="btn btn-primary shadow-sm">
-            + Agregar Nuevo Insumo
-        </a>
+        <h1>Panel de Control (Administrador)</h1>
+        <div>
+            <a asp-controller="Insumos" asp-action="Index" class="btn btn-outline-primary me-2">Ver Catálogo Completo</a>
+            <a asp-controller="Movimientos" asp-action="RegistrarTransaccion" class="btn btn-primary">Registrar Movimiento</a>
+        </div>
     </div>
 
-    @if (Model.AlertasStock != null && Model.AlertasStock.Any())
+    @if (TempData["Exito"] != null)
     {
-        <div class="alert alert-danger shadow-sm mb-4" role="alert">
-            <h4 class="alert-heading fw-bold">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2" viewBox="0 0 16 16">
-                    <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
-                </svg>
-                ¡Alerta de Stock Crítico!
-            </h4>
-            <p>Los siguientes insumos están por debajo de su stock de seguridad:</p>
-            <hr>
-            <ul class="mb-0">
-                @foreach (var alerta in Model.AlertasStock)
-                {
-                    <li><strong>@alerta.Nombre</strong> - Quedan: @alerta.CantidadActual @alerta.UnidadMedida (Mínimo requerido: @alerta.StockMinimo)</li>
-                }
-            </ul>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> @TempData["Exito"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
 
-    <div class="card shadow-sm">
-        <div class="card-header bg-dark text-white">
-            <h5 class="mb-0">Inventario General</h5>
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
-        <div class="card-body p-0">
+    }
+
+    <div class="card border-danger mb-4">
+        <div class="card-header bg-danger text-white">
+            <h5 class="card-title mb-0"><i class="bi bi-bell-fill me-2"></i>Alertas de Stock Crítico (Reabastecimiento Urgente)</h5>
+        </div>
+        <div class="card-body">
+            @if (Model.AlertasStock != null && Model.AlertasStock.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Insumo</th>
+                                <th>Existencia Actual</th>
+                                <th>Stock Mínimo</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var alerta in Model.AlertasStock)
+                            {
+                                <tr class="table-danger">
+                                    <td class="fw-bold">@alerta.Nombre</td>
+                                    <td><span class="badge bg-danger">@alerta.CantidadActual @alerta.UnidadMedida</span></td>
+                                    <td>@alerta.StockMinimo @alerta.UnidadMedida</td>
+                                    <td class="text-danger fw-bold">Por debajo del mínimo de seguridad</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <p class="text-success mb-0"><i class="bi bi-shield-check me-2"></i>Todos los insumos se encuentran en niveles óptimos de almacenamiento.</p>
+            }
+        </div>
+    </div>
+
+    <div class="card border-secondary mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="card-title mb-0"><i class="bi bi-box-seam me-2"></i>Existencias en Tiempo Real (Inventario General)</h5>
+        </div>
+        <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover table-bordered align-middle mb-0">
+                <table class="table table-striped table-hover align-middle">
                     <thead class="table-light">
                         <tr>
-                            <th class="text-center">ID</th>
+                            <th>ID</th>
                             <th>Nombre del Insumo</th>
-                            <th class="text-center">Existencia</th>
-                            <th>Unidad</th>
-                            <th class="text-center">Stock Mínimo</th>
-                            <th class="text-center">Estado</th>
-                            <th class="text-center">Acciones</th>
-                        </tr>
+                            <th>Unidad de Medida</th>
+                            <th>Cantidad Actual</th>
+                            <th>Stock de Seguridad</th>
+                            <th>Estado</th>
+                            </tr>
                     </thead>
                     <tbody>
                         @if (Model.InventarioCompleto != null && Model.InventarioCompleto.Any())
                         {
                             @foreach (var item in Model.InventarioCompleto)
                             {
-                                // Lógica visual: Si la cantidad es menor al mínimo, la fila se pinta de rojo tenue
-                                var rowClass = item.CantidadActual < item.StockMinimo ? "table-danger" : "";
-                                var badgeClass = item.CantidadActual < item.StockMinimo ? "bg-danger" : "bg-success";
-                                var estado = item.CantidadActual < item.StockMinimo ? "Crítico" : "Óptimo";
-
-                                <tr class="@rowClass">
-                                    <td class="text-center">@item.IdInsumo</td>
-                                    <td class="fw-semibold">@item.Nombre</td>
-                                    <td class="text-center fw-bold fs-5">@item.CantidadActual</td>
+                                bool bajoStock = item.CantidadActual < item.StockMinimo;
+                                <tr>
+                                    <td>@item.IdInsumo</td>
+                                    <td class="fw-bold">@item.Nombre</td>
                                     <td>@item.UnidadMedida</td>
-                                    <td class="text-center">@item.StockMinimo</td>
-                                    <td class="text-center"><span class="badge @badgeClass">@estado</span></td>
-                                    <td class="text-center">
-                                        <button type="button" class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" data-bs-target="#clonarModal-@item.IdInsumo">
-                                            Clonar
-                                        </button>
+                                    <td>
+                                        <span class="badge @(bajoStock ? "bg-danger" : "bg-success")">
+                                            @item.CantidadActual
+                                        </span>
+                                    </td>
+                                    <td>@item.StockMinimo</td>
+                                    <td>
+                                        @if (bajoStock)
+                                        {
+                                            <span class="text-danger fw-bold"><i class="bi bi-x-circle-fill me-1"></i> Crítico</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i> Disponible</span>
+                                        }
+                                    </td>
+                                    </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-3">No hay registros cargados en el catálogo de almacén.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
-                                        <div class="modal fade text-start" id="clonarModal-@item.IdInsumo" tabindex="-1" aria-labelledby="clonarLabel-@item.IdInsumo" aria-hidden="true">
-                                            <div class="modal-dialog">
-                                                <div class="modal-content">
-                                                    <form asp-controller="Insumos" asp-action="ClonarInsumo" method="post">
-                                                        <div class="modal-header bg-light">
-                                                            <h5 class="modal-title" id="clonarLabel-@item.IdInsumo">Clonar Insumo Base</h5>
-                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                        </div>
-                                                        <div class="modal-body">
-                                                            <input type="hidden" name="idInsumoBase" value="@item.IdInsumo" />
+    <div class="card border-primary mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0"><i class="bi bi-journal-text me-2"></i>Historial de Movimientos (Auditoría de Almacén)</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID Movimiento</th>
+                            <th>Tipo de Movimiento</th>
+                            <th>Insumo</th>
+                            <th>Cantidad</th>
+                            <th>Registrado Por (Persona)</th>
+                            <th>Fecha y Hora</th>
+                            <th>Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.HistorialMovimientos != null && Model.HistorialMovimientos.Any())
+                        {
+                            @foreach (var movimiento in Model.HistorialMovimientos)
+                            {
+                                string badgeClase = "bg-secondary";
+                                if (movimiento.TipoMovimiento == "Entrada") badgeClase = "bg-success";
+                                else if (movimiento.TipoMovimiento == "Consumo") badgeClase = "bg-info text-dark";
+                                else if (movimiento.TipoMovimiento == "Merma") badgeClase = "bg-warning text-dark";
 
-                                                            <div class="mb-3">
-                                                                <label class="form-label fw-bold">Nuevo Nombre del Producto</label>
-                                                                <input type="text" name="nuevoNombre" class="form-control" value="@item.Nombre (Copia)" required />
-                                                            </div>
-                                                            <div class="mb-3">
-                                                                <label class="form-label fw-bold">Nueva Cantidad Inicial</label>
-                                                                <input type="number" step="0.01" min="0" name="nuevaCantidad" class="form-control" value="0" required />
-                                                            </div>
-
-                                                            <div class="alert alert-info py-2 mb-0">
-                                                                <small><strong>Nota de Arquitectura:</strong> Usando el Patrón Prototype, se heredará automáticamente la unidad de medida (<strong>@item.UnidadMedida</strong>) y el stock mínimo (<strong>@item.StockMinimo</strong>) del producto original.</small>
-                                                            </div>
-                                                        </div>
-                                                        <div class="modal-footer">
-                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                            <button type="submit" class="btn btn-success">Guardar Clon</button>
-                                                        </div>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                        </div>
+                                <tr>
+                                    <td>@movimiento.IdMovimiento</td>
+                                    <td>
+                                        <span class="badge @badgeClase">@movimiento.TipoMovimiento</span>
+                                    </td>
+                                    <td class="fw-bold">@movimiento.NombreInsumo</td>
+                                    <td>@movimiento.Cantidad</td>
+                                    <td>@movimiento.NombrePersona</td>
+                                    <td>@movimiento.FechaMovimiento.ToString("dd/MM/yyyy hh:mm tt")</td>
+                                    <td class="text-muted text-truncate" style="max-width: 200px;">
+                                        @(string.IsNullOrEmpty(movimiento.Observaciones) ? "Sin observaciones" : movimiento.Observaciones)
                                     </td>
                                 </tr>
                             }
@@ -111,9 +171,7 @@
                         else
                         {
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">
-                                    No hay insumos registrados en el inventario. Haz clic en "Agregar Nuevo Insumo".
-                                </td>
+                                <td colspan="7" class="text-center text-muted py-3">No se han registrado transacciones o egresos en el sistema todavía.</td>
                             </tr>
                         }
                     </tbody>
