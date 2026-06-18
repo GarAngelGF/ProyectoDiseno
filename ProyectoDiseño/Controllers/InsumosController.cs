@@ -4,13 +4,13 @@ using ProyectoDiseño.Patrones;
 using ProyectoDiseño.Models;
 using System;
 using System.Collections.Generic;
-using Microsoft.AspNetCore.Http; // IMPORTANTE: Necesario para el manejo de sesiones
+using Microsoft.AspNetCore.Http; // Control de sesiones y seguridad
 
 namespace ProyectoDiseño.Controllers
 {
     public class InsumosController : Controller
     {
-        // Método privado auxiliar para verificar si el usuario es Administrador
+        // CORRECCIÓN: Método de control interno para restringir accesos directos por URL
         private bool ValidarRolAdministrador()
         {
             string rolUsuario = HttpContext.Session.GetString("UsuarioRol");
@@ -21,10 +21,10 @@ namespace ProyectoDiseño.Controllers
         [HttpGet]
         public IActionResult Index()
         {
-            // SOLUCIÓN PUNTO 1: Validación de acceso
+            // CORRECCIÓN: Validación de roles en controladores secundarios
             if (!ValidarRolAdministrador())
             {
-                TempData["Error"] = "Acceso denegado. Esta sección es exclusiva para el Administrador.";
+                TempData["Error"] = "Acceso denegado. Módulo exclusivo para el rol Administrador.";
                 return RedirectToAction("Dashboard", "Home");
             }
 
@@ -33,25 +33,21 @@ namespace ProyectoDiseño.Controllers
 
             try
             {
-                using (conexion)
+                string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo FROM Insumo WHERE Activo = 1";
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
                 {
-                    conexion.Open();
-                    string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo FROM Insumo WHERE Activo = 1";
-                    using (SqlCommand cmd = new SqlCommand(query, conexion))
+                    using (SqlDataReader reader = cmd.ExecuteReader())
                     {
-                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        while (reader.Read())
                         {
-                            while (reader.Read())
+                            lista.Add(new Insumo
                             {
-                                lista.Add(new Insumo
-                                {
-                                    IdInsumo = reader.GetInt32(0),
-                                    Nombre = reader.GetString(1),
-                                    UnidadMedida = reader.GetString(2),
-                                    CantidadActual = reader.GetDecimal(3),
-                                    StockMinimo = reader.GetDecimal(4)
-                                });
-                            }
+                                IdInsumo = reader.GetInt32(0),
+                                Nombre = reader.GetString(1),
+                                UnidadMedida = reader.GetString(2),
+                                CantidadActual = reader.GetDecimal(3),
+                                StockMinimo = reader.GetDecimal(4)
+                            });
                         }
                     }
                 }
@@ -64,11 +60,10 @@ namespace ProyectoDiseño.Controllers
             }
         }
 
-        // POST: Insumos/ClonarInsumo
+        // POST: Insumos/ClonarInsumo (Uso del Patrón Prototype)
         [HttpPost]
         public IActionResult ClonarInsumo(int idInsumoBase, string nuevoNombre, decimal nuevaCantidad)
         {
-            // SOLUCIÓN PUNTO 1: Validación de acceso
             if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
 
             try
@@ -76,25 +71,22 @@ namespace ProyectoDiseño.Controllers
                 Insumo insumoBase = ObtenerInsumoPorId(idInsumoBase);
                 if (insumoBase == null) return NotFound();
 
+                // Clonación mediante Prototype heredando UnidadMedida y StockMinimo automáticamente
                 Insumo nuevoInsumo = insumoBase.Clonar(nuevoNombre, nuevaCantidad);
 
                 SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
-                using (conexion)
+                string query = @"INSERT INTO Insumo (Nombre, UnidadMedida, CantidadActual, StockMinimo, Activo) 
+                                 VALUES (@Nombre, @UnidadMedida, @CantidadActual, @StockMinimo, 1)";
+
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
                 {
-                    conexion.Open();
-                    string query = @"INSERT INTO Insumo (Nombre, UnidadMedida, CantidadActual, StockMinimo, Activo) 
-                                     VALUES (@Nombre, @UnidadMedida, @CantidadActual, @StockMinimo, 1)";
+                    cmd.Parameters.AddWithValue("@Nombre", nuevoInsumo.Nombre);
+                    cmd.Parameters.AddWithValue("@UnidadMedida", nuevoInsumo.UnidadMedida);
+                    cmd.Parameters.AddWithValue("@CantidadActual", nuevoInsumo.CantidadActual);
+                    cmd.Parameters.AddWithValue("@StockMinimo", nuevoInsumo.StockMinimo);
 
-                    using (SqlCommand cmd = new SqlCommand(query, conexion))
-                    {
-                        cmd.Parameters.AddWithValue("@Nombre", nuevoInsumo.Nombre);
-                        cmd.Parameters.AddWithValue("@UnidadMedida", nuevoInsumo.UnidadMedida);
-                        cmd.Parameters.AddWithValue("@CantidadActual", nuevoInsumo.CantidadActual);
-                        cmd.Parameters.AddWithValue("@StockMinimo", nuevoInsumo.StockMinimo);
-
-                        cmd.ExecuteNonQuery();
-                    }
+                    cmd.ExecuteNonQuery();
                 }
 
                 TempData["Exito"] = "Insumo clonado correctamente mediante el Patrón Prototype.";
@@ -112,27 +104,23 @@ namespace ProyectoDiseño.Controllers
             Insumo insumo = null;
             SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
-            using (conexion)
+            string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo, Activo FROM Insumo WHERE IdInsumo = @IdInsumo";
+            using (SqlCommand cmd = new SqlCommand(query, conexion))
             {
-                conexion.Open();
-                string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo, Activo FROM Insumo WHERE IdInsumo = @IdInsumo";
-                using (SqlCommand cmd = new SqlCommand(query, conexion))
+                cmd.Parameters.AddWithValue("@IdInsumo", id);
+                using (SqlDataReader reader = cmd.ExecuteReader())
                 {
-                    cmd.Parameters.AddWithValue("@IdInsumo", id);
-                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    if (reader.Read())
                     {
-                        if (reader.Read())
+                        insumo = new Insumo
                         {
-                            insumo = new Insumo
-                            {
-                                IdInsumo = reader.GetInt32(0),
-                                Nombre = reader.GetString(1),
-                                UnidadMedida = reader.GetString(2),
-                                CantidadActual = reader.GetDecimal(3),
-                                StockMinimo = reader.GetDecimal(4),
-                                Activo = reader.GetBoolean(5)
-                            };
-                        }
+                            IdInsumo = reader.GetInt32(0),
+                            Nombre = reader.GetString(1),
+                            UnidadMedida = reader.GetString(2),
+                            CantidadActual = reader.GetDecimal(3),
+                            StockMinimo = reader.GetDecimal(4),
+                            Activo = reader.GetBoolean(5)
+                        };
                     }
                 }
             }
@@ -140,11 +128,10 @@ namespace ProyectoDiseño.Controllers
         }
 
         // GET: Insumos/Crear
+        [HttpGet]
         public IActionResult Crear()
         {
-            // SOLUCIÓN PUNTO 1: Validación de acceso
             if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
-
             return View();
         }
 
@@ -152,7 +139,6 @@ namespace ProyectoDiseño.Controllers
         [HttpPost]
         public IActionResult Crear(Insumo insumo)
         {
-            // SOLUCIÓN PUNTO 1: Validación de acceso
             if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
 
             if (insumo.StockMinimo <= 0)
@@ -166,21 +152,17 @@ namespace ProyectoDiseño.Controllers
                 try
                 {
                     SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
-                    using (conexion)
+                    string query = @"INSERT INTO Insumo (Nombre, UnidadMedida, CantidadActual, StockMinimo, Activo) 
+                                     VALUES (@Nombre, @UnidadMedida, @CantidadActual, @StockMinimo, 1)";
+
+                    using (SqlCommand cmd = new SqlCommand(query, conexion))
                     {
-                        conexion.Open();
-                        string query = @"INSERT INTO Insumo (Nombre, UnidadMedida, CantidadActual, StockMinimo, Activo) 
-                                         VALUES (@Nombre, @UnidadMedida, @CantidadActual, @StockMinimo, 1)";
+                        cmd.Parameters.AddWithValue("@Nombre", insumo.Nombre);
+                        cmd.Parameters.AddWithValue("@UnidadMedida", insumo.UnidadMedida);
+                        cmd.Parameters.AddWithValue("@CantidadActual", insumo.CantidadActual);
+                        cmd.Parameters.AddWithValue("@StockMinimo", insumo.StockMinimo);
 
-                        using (SqlCommand cmd = new SqlCommand(query, conexion))
-                        {
-                            cmd.Parameters.AddWithValue("@Nombre", insumo.Nombre);
-                            cmd.Parameters.AddWithValue("@UnidadMedida", insumo.UnidadMedida);
-                            cmd.Parameters.AddWithValue("@CantidadActual", insumo.CantidadActual);
-                            cmd.Parameters.AddWithValue("@StockMinimo", insumo.StockMinimo);
-
-                            cmd.ExecuteNonQuery();
-                        }
+                        cmd.ExecuteNonQuery();
                     }
                     return RedirectToAction("Index");
                 }
@@ -196,7 +178,6 @@ namespace ProyectoDiseño.Controllers
         [HttpGet]
         public IActionResult Editar(int id)
         {
-            // SOLUCIÓN PUNTO 1: Validación de acceso
             if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
 
             Insumo insumo = ObtenerInsumoPorId(id);
@@ -208,7 +189,6 @@ namespace ProyectoDiseño.Controllers
         [HttpPost]
         public IActionResult Editar(Insumo insumo)
         {
-            // SOLUCIÓN PUNTO 1: Validación de acceso
             if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
 
             if (insumo.StockMinimo <= 0)
@@ -220,20 +200,16 @@ namespace ProyectoDiseño.Controllers
             try
             {
                 SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
-                using (conexion)
+                string query = @"UPDATE Insumo SET Nombre = @Nombre, UnidadMedida = @UnidadMedida, 
+                                 StockMinimo = @StockMinimo, Activo = @Activo WHERE IdInsumo = @IdInsumo";
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
                 {
-                    conexion.Open();
-                    string query = @"UPDATE Insumo SET Nombre = @Nombre, UnidadMedida = @UnidadMedida, 
-                                     StockMinimo = @StockMinimo, Activo = @Activo WHERE IdInsumo = @IdInsumo";
-                    using (SqlCommand cmd = new SqlCommand(query, conexion))
-                    {
-                        cmd.Parameters.AddWithValue("@Nombre", insumo.Nombre);
-                        cmd.Parameters.AddWithValue("@UnidadMedida", insumo.UnidadMedida);
-                        cmd.Parameters.AddWithValue("@StockMinimo", insumo.StockMinimo);
-                        cmd.Parameters.AddWithValue("@Activo", insumo.Activo);
-                        cmd.Parameters.AddWithValue("@IdInsumo", insumo.IdInsumo);
-                        cmd.ExecuteNonQuery();
-                    }
+                    cmd.Parameters.AddWithValue("@Nombre", insumo.Nombre);
+                    cmd.Parameters.AddWithValue("@UnidadMedida", insumo.UnidadMedida);
+                    cmd.Parameters.AddWithValue("@StockMinimo", insumo.StockMinimo);
+                    cmd.Parameters.AddWithValue("@Activo", insumo.Activo);
+                    cmd.Parameters.AddWithValue("@IdInsumo", insumo.IdInsumo);
+                    cmd.ExecuteNonQuery();
                 }
                 return RedirectToAction("Index");
             }
@@ -248,21 +224,16 @@ namespace ProyectoDiseño.Controllers
         [HttpPost]
         public IActionResult Eliminar(int idInsumo)
         {
-            // SOLUCIÓN PUNTO 1: Validación de acceso
             if (!ValidarRolAdministrador()) return RedirectToAction("Dashboard", "Home");
 
             try
             {
                 SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
-                using (conexion)
+                string query = "UPDATE Insumo SET Activo = 0 WHERE IdInsumo = @IdInsumo";
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
                 {
-                    conexion.Open();
-                    string query = "UPDATE Insumo SET Activo = 0 WHERE IdInsumo = @IdInsumo";
-                    using (SqlCommand cmd = new SqlCommand(query, conexion))
-                    {
-                        cmd.Parameters.AddWithValue("@IdInsumo", idInsumo);
-                        cmd.ExecuteNonQuery();
-                    }
+                    cmd.Parameters.AddWithValue("@IdInsumo", idInsumo);
+                    cmd.ExecuteNonQuery();
                 }
                 return RedirectToAction("Index");
             }

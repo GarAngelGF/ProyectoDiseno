@@ -3,8 +3,8 @@ using Microsoft.Data.SqlClient;
 using ProyectoDiseño.Patrones;
 using ProyectoDiseño.Models;
 using System;
-using System.Collections.Generic;
-using Microsoft.AspNetCore.Http; // REQUERIDO: Para acceder a HttpContext.Session
+using System.Collections.Generic; // Para listar insumos en el dropdown
+using Microsoft.AspNetCore.Http; // Acceso a sesiones seguras
 
 namespace ProyectoDiseño.Controllers
 {
@@ -16,13 +16,16 @@ namespace ProyectoDiseño.Controllers
             return !string.IsNullOrEmpty(rolUsuario);
         }
 
+        // ==========================================
+        // CORRECCIÓN: ACCIÓN GET PARA RENDERIZAR LA VISTA DE TRANSACCIONES
+        // ==========================================
         // GET: Movimientos/RegistrarTransaccion
         [HttpGet]
         public IActionResult RegistrarTransaccion()
         {
             if (!UsuarioEstaAutenticado())
             {
-                TempData["Error"] = "Debe iniciar sesión para acceder a este módulo.";
+                TempData["Error"] = "Debe iniciar sesión para realizar movimientos de almacén.";
                 return RedirectToAction("Index", "Home");
             }
 
@@ -31,25 +34,21 @@ namespace ProyectoDiseño.Controllers
 
             try
             {
-                using (conexion)
+                string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo FROM Insumo WHERE Activo = 1";
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
                 {
-                    conexion.Open();
-                    string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo FROM Insumo WHERE Activo = 1";
-                    using (SqlCommand cmd = new SqlCommand(query, conexion))
+                    using (SqlDataReader reader = cmd.ExecuteReader())
                     {
-                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        while (reader.Read())
                         {
-                            while (reader.Read())
+                            listaInsumos.Add(new Insumo
                             {
-                                listaInsumos.Add(new Insumo
-                                {
-                                    IdInsumo = reader.GetInt32(0),
-                                    Nombre = reader.GetString(1),
-                                    UnidadMedida = reader.GetString(2),
-                                    CantidadActual = reader.GetDecimal(3),
-                                    StockMinimo = reader.GetDecimal(4)
-                                });
-                            }
+                                IdInsumo = reader.GetInt32(0),
+                                Nombre = reader.GetString(1),
+                                UnidadMedida = reader.GetString(2),
+                                CantidadActual = reader.GetDecimal(3),
+                                StockMinimo = reader.GetDecimal(4)
+                            });
                         }
                     }
                 }
@@ -59,36 +58,28 @@ namespace ProyectoDiseño.Controllers
             }
             catch (Exception ex)
             {
-                TempData["Error"] = "Error al cargar los insumos: " + ex.Message;
+                TempData["Error"] = "Error del servidor al inicializar el formulario: " + ex.Message;
                 return RedirectToAction("Dashboard", "Home");
             }
         }
 
         // POST: Movimientos/RegistrarEgreso
-        // SOLUCIÓN: Se eliminó 'int idPersona' de los parámetros de la solicitud externa
+        // CORRECCIÓN SEGURIDAD: Se elimina 'idPersona' de los parámetros para mitigar suplantación de identidad
         [HttpPost]
         public IActionResult RegistrarEgreso(int idInsumo, decimal cantidadARetirar, string tipoMovimiento)
         {
-            // 1. CONTROL DE ACCESO GLOBAL
             if (!UsuarioEstaAutenticado())
             {
                 return RedirectToAction("Index", "Home");
             }
 
-            // =========================================================================
-            // 2. SOLUCIÓN: EXTRACCIÓN SEGURA DE LA IDENTIDAD DEL LADO DEL SERVIDOR
-            // =========================================================================
-            int? idPersonaLogueada = HttpContext.Session.GetInt32("UsuarioId");
-            
-            if (!idPersonaLogueada.HasValue)
+            // CORRECCIÓN AUDITORÍA: Extracción estricta del ID del usuario desde la sesión en el Servidor
+            int? idPersonaSegura = HttpContext.Session.GetInt32("UsuarioId");
+            if (!idPersonaSegura.HasValue)
             {
-                TempData["Error"] = "Su sesión ha expirado o es inválida. Por favor, vuelva a autenticarse.";
+                TempData["Error"] = "Sesión inválida. Vuelva a iniciar sesión.";
                 return RedirectToAction("Index", "Home");
             }
-
-            // Convertimos el valor seguro a tipo int para su uso en las consultas SQL
-            int idPersonaSegura = idPersonaLogueada.Value;
-            // =========================================================================
 
             if (tipoMovimiento != "Consumo" && tipoMovimiento != "Merma" && tipoMovimiento != "Entrada")
             {
@@ -98,84 +89,69 @@ namespace ProyectoDiseño.Controllers
 
             SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
-            using (conexion)
+            try
             {
-                try
+                decimal stockActual = 0;
+                string queryCheck = "SELECT CantidadActual FROM Insumo WHERE IdInsumo = @IdInsumo AND Activo = 1";
+
+                using (SqlCommand cmdCheck = new SqlCommand(queryCheck, conexion))
                 {
-                    conexion.Open();
+                    cmdCheck.Parameters.AddWithValue("@IdInsumo", idInsumo);
+                    object resultado = cmdCheck.ExecuteScalar();
+
+                    if (resultado == null)
+                    {
+                        TempData["Error"] = "El insumo seleccionado no se encuentra activo.";
+                        return RedirectToAction("Dashboard", "Home");
+                    }
+                    stockActual = Convert.ToDecimal(resultado);
                 }
-                catch (Exception ex)
+
+                string queryUpdate = "";
+
+                if (tipoMovimiento == "Entrada")
                 {
-                    TempData["Error"] = "Error al conectar con la base de datos: " + ex.Message;
-                    return RedirectToAction("Dashboard", "Home");
+                    queryUpdate = "UPDATE Insumo SET CantidadActual = CantidadActual + @Cantidad WHERE IdInsumo = @IdInsumo";
                 }
-
-                SqlTransaction transaccion = conexion.BeginTransaction();
-
-                try
+                else
                 {
-                    decimal stockActual = 0;
-                    string queryCheck = "SELECT CantidadActual FROM Insumo WHERE IdInsumo = @IdInsumo AND Activo = 1";
-
-                    using (SqlCommand cmdCheck = new SqlCommand(queryCheck, conexion, transaccion))
+                    if (cantidadARetirar > stockActual)
                     {
-                        cmdCheck.Parameters.AddWithValue("@IdInsumo", idInsumo);
-                        object resultado = cmdCheck.ExecuteScalar();
-
-                        if (resultado == null)
-                        {
-                            throw new Exception("El insumo no existe o está inactivo.");
-                        }
-                        stockActual = Convert.ToDecimal(resultado);
+                        TempData["Error"] = $"Operación denegada (RN-01): Intenta retirar {cantidadARetirar} unidades, pero solo existen {stockActual}.";
+                        return RedirectToAction("Dashboard", "Home");
                     }
 
-                    string queryUpdate = "";
-
-                    if (tipoMovimiento == "Entrada")
-                    {
-                        queryUpdate = "UPDATE Insumo SET CantidadActual = CantidadActual + @Cantidad WHERE IdInsumo = @IdInsumo";
-                    }
-                    else
-                    {
-                        if (cantidadARetirar > stockActual)
-                        {
-                            transaccion.Rollback();
-                            TempData["Error"] = $"Operación denegada (RN-01): Intenta retirar {cantidadARetirar} unidades, pero solo hay {stockActual} en existencia.";
-                            return RedirectToAction("Dashboard", "Home");
-                        }
-
-                        queryUpdate = "UPDATE Insumo SET CantidadActual = CantidadActual - @Cantidad WHERE IdInsumo = @IdInsumo";
-                    }
-
-                    using (SqlCommand cmdUpdate = new SqlCommand(queryUpdate, conexion, transaccion))
-                    {
-                        cmdUpdate.Parameters.AddWithValue("@Cantidad", cantidadARetirar);
-                        cmdUpdate.Parameters.AddWithValue("@IdInsumo", idInsumo);
-                        cmdUpdate.ExecuteNonQuery();
-                    }
-
-                    // 3. REGISTRO EN EL HISTORIAL USANDO LA VARIABLE DE SESIÓN SEGURA
-                    string queryHistorial = @"INSERT INTO MovimientoInventario (IdInsumo, IdPersona, TipoMovimiento, Cantidad, FechaMovimiento) 
-                                              VALUES (@IdInsumo, @IdPersona, @TipoMovimiento, @Cantidad, GETDATE())";
-                    using (SqlCommand cmdHistorial = new SqlCommand(queryHistorial, conexion, transaccion))
-                    {
-                        cmdHistorial.Parameters.AddWithValue("@IdInsumo", idInsumo);
-                        cmdHistorial.Parameters.AddWithValue("@IdPersona", idPersonaSegura); // Asignación del valor de sesión validado
-                        cmdHistorial.Parameters.AddWithValue("@TipoMovimiento", tipoMovimiento);
-                        cmdHistorial.Parameters.AddWithValue("@Cantidad", cantidadARetirar);
-                        cmdHistorial.ExecuteNonQuery();
-                    }
-
-                    transaccion.Commit();
-                    TempData["Exito"] = $"Transacción de tipo '{tipoMovimiento}' registrada. Stock actualizado correctamente.";
+                    queryUpdate = "UPDATE Insumo SET CantidadActual = CantidadActual - @Cantidad WHERE IdInsumo = @IdInsumo";
                 }
-                catch (Exception ex)
+
+                // Actualizar Stock
+                using (SqlCommand cmdUpdate = new SqlCommand(queryUpdate, conexion))
                 {
-                    transaccion.Rollback();
-                    TempData["Error"] = "Ocurrió un error en el servidor: " + ex.Message;
+                    cmdUpdate.Parameters.AddWithValue("@Cantidad", cantidadARetirar);
+                    cmdUpdate.Parameters.AddWithValue("@IdInsumo", idInsumo);
+                    cmdUpdate.ExecuteNonQuery();
                 }
+
+                // Insertar Historial con la Identidad Verificada de la Sesión
+                string queryHistorial = @"INSERT INTO MovimientoInventario (IdInsumo, IdPersona, TipoMovimiento, Cantidad, FechaMovimiento) 
+                                          VALUES (@IdInsumo, @IdPersona, @TipoMovimiento, @Cantidad, GETDATE())";
+                using (SqlCommand cmdHistorial = new SqlCommand(queryHistorial, conexion))
+                {
+                    cmdHistorial.Parameters.AddWithValue("@IdInsumo", idInsumo);
+                    cmdHistorial.Parameters.AddWithValue("@IdPersona", idPersonaSegura.Value);
+                    cmdHistorial.Parameters.AddWithValue("@TipoMovimiento", tipoMovimiento);
+                    cmdHistorial.Parameters.AddWithValue("@Cantidad", cantidadARetirar);
+                    cmdHistorial.ExecuteNonQuery();
+                }
+
+                TempData["Exito"] = $"Transacción '{tipoMovimiento}' completada con éxito.";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = "Error transaccional en el servidor: " + ex.Message;
             }
 
+            // CORRECCIÓN ENRUTAMIENTO: Redirección segura a Home/Dashboard (Solución de Error 404)
             return RedirectToAction("Dashboard", "Home");
         }
     }

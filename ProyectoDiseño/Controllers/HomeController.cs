@@ -5,7 +5,7 @@ using ProyectoDiseño.Patrones;
 using ProyectoDiseño.ViewModels;
 using System;
 using System.Collections.Generic;
-using Microsoft.AspNetCore.Http; // Necesario para el manejo de sesiones
+using Microsoft.AspNetCore.Http; // Manejo de sesiones
 
 namespace ProyectoDiseño.Controllers
 {
@@ -27,40 +27,36 @@ namespace ProyectoDiseño.Controllers
         [HttpPost]
         public IActionResult Login(string usuario, string contrasena)
         {
+            // CORRECCIÓN: Conexión centralizada única a través del Singleton
             SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
             try
             {
-                using (conexion)
+                // Consulta segura para verificar las credenciales de la Persona
+                string query = @"SELECT IdPersona, NombreCompleto, Rol 
+                                 FROM Persona 
+                                 WHERE Usuario = @Usuario AND ContrasenaHash = @Contrasena AND Activo = 1";
+
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
                 {
-                    conexion.Open();
-                    // Consulta segura para verificar las credenciales de la Persona
-                    string query = @"SELECT IdPersona, NombreCompleto, Rol 
-                                     FROM Persona 
-                                     WHERE Usuario = @Usuario AND ContrasenaHash = @Contrasena AND Activo = 1";
+                    cmd.Parameters.AddWithValue("@Usuario", usuario);
+                    cmd.Parameters.AddWithValue("@Contrasena", contrasena);
 
-                    using (SqlCommand cmd = new SqlCommand(query, conexion))
+                    using (SqlDataReader reader = cmd.ExecuteReader())
                     {
-                        cmd.Parameters.AddWithValue("@Usuario", usuario);
-                        cmd.Parameters.AddWithValue("@Contrasena", contrasena);
-
-                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        if (reader.Read())
                         {
-                            if (reader.Read())
-                            {
-                                // GUARDAR EN SESIÓN LOS DATOS DEL REGISTRO ENCONTRADO
-                                HttpContext.Session.SetInt32("UsuarioId", reader.GetInt32(0));
-                                HttpContext.Session.SetString("UsuarioNombre", reader.GetString(1));
-                                HttpContext.Session.SetString("UsuarioRol", reader.GetString(2));
+                            // GUARDAR EN SESIÓN LOS DATOS DEL REGISTRO ENCONTRADO
+                            HttpContext.Session.SetInt32("UsuarioId", reader.GetInt32(0));
+                            HttpContext.Session.SetString("UsuarioNombre", reader.GetString(1));
+                            HttpContext.Session.SetString("UsuarioRol", reader.GetString(2));
 
-                                return RedirectToAction("Dashboard");
-                            }
-                            else
-                            {
-                                // Mensaje temporal si los datos no coinciden
-                                ViewBag.Error = "Usuario o contraseña incorrectos, o cuenta inactiva.";
-                                return View("Index");
-                            }
+                            return RedirectToAction("Dashboard");
+                        }
+                        else
+                        {
+                            ViewBag.Error = "Usuario o contraseña incorrectos, o cuenta inactiva.";
+                            return View("Index");
                         }
                     }
                 }
@@ -76,7 +72,6 @@ namespace ProyectoDiseño.Controllers
         [HttpGet]
         public IActionResult Dashboard()
         {
-            // Recuperamos el rol guardado en la sesión
             string rolUsuario = HttpContext.Session.GetString("UsuarioRol");
 
             // Restricción: Si no ha iniciado sesión, se bloquea el acceso
@@ -85,9 +80,7 @@ namespace ProyectoDiseño.Controllers
                 return RedirectToAction("Index");
             }
 
-            var inventario = ObtenerInventario();
-            var alertas = inventario.FindAll(i => i.CantidadActual < i.StockMinimo);
-
+            var inventario = ObtenerInventario(); var alertas = inventario.FindAll(i => i.CantidadActual < i.StockMinimo);
             var viewModel = new DashboardViewModel
             {
                 InventarioCompleto = inventario,
@@ -104,7 +97,6 @@ namespace ProyectoDiseño.Controllers
                 return View("DashboardAdmin", viewModel);
             }
 
-            // Si tiene un rol no identificado, limpia y expulsa
             return RedirectToAction("Logout");
         }
 
@@ -120,25 +112,21 @@ namespace ProyectoDiseño.Controllers
             var lista = new List<Insumo>();
             SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
-            using (conexion)
+            string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo FROM Insumo WHERE Activo = 1";
+            using (SqlCommand cmd = new SqlCommand(query, conexion))
             {
-                conexion.Open();
-                string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo FROM Insumo WHERE Activo = 1";
-                using (SqlCommand cmd = new SqlCommand(query, conexion))
+                using (SqlDataReader reader = cmd.ExecuteReader())
                 {
-                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    while (reader.Read())
                     {
-                        while (reader.Read())
+                        lista.Add(new Insumo
                         {
-                            lista.Add(new Insumo
-                            {
-                                IdInsumo = reader.GetInt32(0),
-                                Nombre = reader.GetString(1),
-                                UnidadMedida = reader.GetString(2),
-                                CantidadActual = reader.GetDecimal(3),
-                                StockMinimo = reader.GetDecimal(4)
-                            });
-                        }
+                            IdInsumo = reader.GetInt32(0),
+                            Nombre = reader.GetString(1),
+                            UnidadMedida = reader.GetString(2),
+                            CantidadActual = reader.GetDecimal(3),
+                            StockMinimo = reader.GetDecimal(4)
+                        });
                     }
                 }
             }
