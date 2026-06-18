@@ -9,9 +9,7 @@ namespace ProyectoDiseño.Controllers
 {
     public class InsumosController : Controller
     {
-        // ==========================================
-        // AGREGADO: GET: Insumos (Catálogo)
-        // ==========================================
+        // GET: Insumos (Catálogo General)
         [HttpGet]
         public IActionResult Index()
         {
@@ -47,20 +45,23 @@ namespace ProyectoDiseño.Controllers
             catch (Exception ex)
             {
                 TempData["Error"] = "Error al cargar el catálogo: " + ex.Message;
-                return RedirectToAction("Index", "Home");
+                return RedirectToAction("Dashboard", "Home");
             }
         }
 
-        // POST: Insumos/ClonarInsumo
+        // CORREGIDO - POST: Insumos/ClonarInsumo (Uso del Patrón Prototype)
         [HttpPost]
         public IActionResult ClonarInsumo(int idInsumoBase, string nuevoNombre, decimal nuevaCantidad)
         {
             try
             {
+                // Se obtiene el insumo real de la base de datos para usarlo como prototipo de plantilla
                 Insumo insumoBase = ObtenerInsumoPorId(idInsumoBase);
                 if (insumoBase == null) return NotFound();
 
+                // Clonación del objeto base heredando UnidadMedida y StockMinimo automáticamente
                 Insumo nuevoInsumo = insumoBase.Clonar(nuevoNombre, nuevaCantidad);
+
                 SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
                 using (conexion)
@@ -80,24 +81,47 @@ namespace ProyectoDiseño.Controllers
                     }
                 }
 
-                return RedirectToAction("Index"); // Ahora sí funcionará
+                TempData["Exito"] = "Insumo clonado correctamente mediante el Patrón Prototype.";
+                return RedirectToAction("Index");
             }
             catch (Exception ex)
             {
-                return View("Error");
+                TempData["Error"] = "Error al clonar el registro: " + ex.Message;
+                return RedirectToAction("Index");
             }
         }
 
+        // CORREGIDO: Consulta real con ADO.NET utilizando la conexión centralizada del Singleton
         private Insumo ObtenerInsumoPorId(int id)
         {
-            return new Insumo
+            Insumo insumo = null;
+            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
+
+            using (conexion)
             {
-                IdInsumo = id,
-                Nombre = "Leche Entera Marca A",
-                UnidadMedida = "Litros",
-                CantidadActual = 10,
-                StockMinimo = 5
-            };
+                conexion.Open();
+                string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo, Activo FROM Insumo WHERE IdInsumo = @IdInsumo";
+                using (SqlCommand cmd = new SqlCommand(query, conexion))
+                {
+                    cmd.Parameters.AddWithValue("@IdInsumo", id);
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            insumo = new Insumo
+                            {
+                                IdInsumo = reader.GetInt32(0),
+                                Nombre = reader.GetString(1),
+                                UnidadMedida = reader.GetString(2),
+                                CantidadActual = reader.GetDecimal(3),
+                                StockMinimo = reader.GetDecimal(4),
+                                Activo = reader.GetBoolean(5)
+                            };
+                        }
+                    }
+                }
+            }
+            return insumo;
         }
 
         // GET: Insumos/Crear
@@ -137,7 +161,7 @@ namespace ProyectoDiseño.Controllers
                             cmd.ExecuteNonQuery();
                         }
                     }
-                    return RedirectToAction("Index"); // Ahora sí funcionará
+                    return RedirectToAction("Index");
                 }
                 catch (Exception ex)
                 {
@@ -146,36 +170,12 @@ namespace ProyectoDiseño.Controllers
             }
             return View(insumo);
         }
+
         // GET: Insumos/Editar/5
         [HttpGet]
         public IActionResult Editar(int id)
         {
-            Insumo insumo = null;
-            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
-            using (conexion)
-            {
-                conexion.Open();
-                string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo, Activo FROM Insumo WHERE IdInsumo = @IdInsumo";
-                using (SqlCommand cmd = new SqlCommand(query, conexion))
-                {
-                    cmd.Parameters.AddWithValue("@IdInsumo", id);
-                    using (SqlDataReader reader = cmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            insumo = new Insumo
-                            {
-                                IdInsumo = reader.GetInt32(0),
-                                Nombre = reader.GetString(1),
-                                UnidadMedida = reader.GetString(2),
-                                CantidadActual = reader.GetDecimal(3),
-                                StockMinimo = reader.GetDecimal(4),
-                                Activo = reader.GetBoolean(5)
-                            };
-                        }
-                    }
-                }
-            }
+            Insumo insumo = ObtenerInsumoPorId(id);
             if (insumo == null) return NotFound();
             return View(insumo);
         }
@@ -190,42 +190,57 @@ namespace ProyectoDiseño.Controllers
                 return View(insumo);
             }
 
-            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
-            using (conexion)
+            try
             {
-                conexion.Open();
-                string query = @"UPDATE Insumo SET Nombre = @Nombre, UnidadMedida = @UnidadMedida, 
-                                 StockMinimo = @StockMinimo, Activo = @Activo WHERE IdInsumo = @IdInsumo";
-                using (SqlCommand cmd = new SqlCommand(query, conexion))
+                SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
+                using (conexion)
                 {
-                    cmd.Parameters.AddWithValue("@Nombre", insumo.Nombre);
-                    cmd.Parameters.AddWithValue("@UnidadMedida", insumo.UnidadMedida);
-                    cmd.Parameters.AddWithValue("@StockMinimo", insumo.StockMinimo);
-                    cmd.Parameters.AddWithValue("@Activo", insumo.Activo);
-                    cmd.Parameters.AddWithValue("@IdInsumo", insumo.IdInsumo);
-                    cmd.ExecuteNonQuery();
+                    conexion.Open();
+                    string query = @"UPDATE Insumo SET Nombre = @Nombre, UnidadMedida = @UnidadMedida, 
+                                     StockMinimo = @StockMinimo, Activo = @Activo WHERE IdInsumo = @IdInsumo";
+                    using (SqlCommand cmd = new SqlCommand(query, conexion))
+                    {
+                        cmd.Parameters.AddWithValue("@Nombre", insumo.Nombre);
+                        cmd.Parameters.AddWithValue("@UnidadMedida", insumo.UnidadMedida);
+                        cmd.Parameters.AddWithValue("@StockMinimo", insumo.StockMinimo);
+                        cmd.Parameters.AddWithValue("@Activo", insumo.Activo);
+                        cmd.Parameters.AddWithValue("@IdInsumo", insumo.IdInsumo);
+                        cmd.ExecuteNonQuery();
+                    }
                 }
+                return RedirectToAction("Index");
             }
-            return RedirectToAction("Index");
+            catch (Exception ex)
+            {
+                ModelState.AddModelError("", "Error interno al actualizar el registro: " + ex.Message);
+                return View(insumo);
+            }
         }
 
-        // POST: Insumos/Eliminar (Baja Lógica)
+        // POST: Insumos/Eliminar (Baja Lógica CRUD - RF-01)
         [HttpPost]
         public IActionResult Eliminar(int idInsumo)
         {
-            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
-            using (conexion)
+            try
             {
-                conexion.Open();
-                // Solo actualiza el campo Activo a 0 (False)
-                string query = "UPDATE Insumo SET Activo = 0 WHERE IdInsumo = @IdInsumo";
-                using (SqlCommand cmd = new SqlCommand(query, conexion))
+                SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
+                using (conexion)
                 {
-                    cmd.Parameters.AddWithValue("@IdInsumo", idInsumo);
-                    cmd.ExecuteNonQuery();
+                    conexion.Open();
+                    string query = "UPDATE Insumo SET Activo = 0 WHERE IdInsumo = @IdInsumo";
+                    using (SqlCommand cmd = new SqlCommand(query, conexion))
+                    {
+                        cmd.Parameters.AddWithValue("@IdInsumo", idInsumo);
+                        cmd.ExecuteNonQuery();
+                    }
                 }
+                return RedirectToAction("Index");
             }
-            return RedirectToAction("Index");
+            catch (Exception ex)
+            {
+                TempData["Error"] = "Error al dar de baja el insumo: " + ex.Message;
+                return RedirectToAction("Index");
+            }
         }
     }
 }

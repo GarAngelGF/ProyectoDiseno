@@ -1,5 +1,70 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model ProyectoDiseño.Models.Insumo
+
 @{
+    ViewData["Title"] = "Confirmar Baja";
 }
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-danger text-white p-3">
+                    <h5 class="mb-0 fw-bold">
+                        <i class="bi bi-trash3-fill me-2"></i>Confirmar Baja de Insumo
+                    </h5>
+                </div>
+                <div class="card-body p-4 bg-light">
+
+                    <div class="alert alert-warning border-0 shadow-sm mb-4" role="alert">
+                        <h5 class="alert-heading fw-bold mb-1">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>¿Estás seguro de continuar?
+                        </h5>
+                        <p class="mb-0 small">
+                            Estás a punto de deshabilitar este ingrediente del catálogo activo. Al confirmarlo, el personal de cocina ya no podrá visualizarlo ni registrar consumos sobre él.
+                        </p>
+                    </div>
+
+                    <div class="bg-white p-3 rounded border mb-4 shadow-sm">
+                        <dl class="row mb-0 align-items-center">
+                            <dt class="col-sm-4 text-secondary fw-semibold small text-uppercase">ID Registro:</dt>
+                            <dd class="col-sm-8 fw-mono">#@Model.IdInsumo</dd>
+
+                            <dt class="col-sm-4 text-secondary fw-semibold small text-uppercase mt-2">Nombre:</dt>
+                            <dd class="col-sm-8 text-primary fw-bold mt-2 fs-5">@Model.Nombre</dd>
+
+                            <dt class="col-sm-4 text-secondary fw-semibold small text-uppercase mt-2">Medida:</dt>
+                            <dd class="col-sm-8 mt-2">@Model.UnidadMedida</dd>
+
+                            <dt class="col-sm-4 text-secondary fw-semibold small text-uppercase mt-2">Existencia:</dt>
+                            <dd class="col-sm-8 fw-bold text-dark mt-2">@Model.CantidadActual @Model.UnidadMedida</dd>
+
+                            <dt class="col-sm-4 text-secondary fw-semibold small text-uppercase mt-2">Stock Mínimo:</dt>
+                            <dd class="col-sm-8 text-muted mt-2">@Model.StockMinimo @Model.UnidadMedida</dd>
+                        </dl>
+                    </div>
+
+                    <div class="alert alert-secondary py-2 border-0 rounded-3 mb-4">
+                        <small class="text-muted d-block">
+                            <strong>Nota de Arquitectura (Baja Lógica):</strong> De acuerdo con las reglas de negocio, esta acción modificará el estado operativo del insumo a <code>Activo = 0</code>. El registro permanecerá en SQL Server para salvaguardar la integridad de la tabla de auditoría de movimientos.
+                        </small>
+                    </div>
+
+                    <form asp-controller="Insumos" asp-action="Eliminar" method="post">
+
+                        <input type="hidden" name="idInsumo" value="@Model.IdInsumo" />
+
+                        <div class="d-flex justify-content-end gap-2 mt-2">
+                            <a asp-controller="Insumos" asp-action="Index" class="btn btn-outline-secondary px-4">
+                                Cancelar, Volver Atrás
+                            </a>
+                            <button type="submit" class="btn btn-danger px-4 fw-bold shadow-sm">
+                                Confirmar Baja
+                            </button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
