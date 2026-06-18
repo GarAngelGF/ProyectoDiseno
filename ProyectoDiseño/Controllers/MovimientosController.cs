@@ -3,27 +3,82 @@ using Microsoft.Data.SqlClient;
 using ProyectoDiseño.Patrones;
 using ProyectoDiseño.Models;
 using System;
-using Microsoft.AspNetCore.Http; // IMPORTANTE: Necesario para el manejo de sesiones
+using System.Collections.Generic; // REQUERIDO: Para el manejo de listas de Insumos
+using Microsoft.AspNetCore.Http; // REQUERIDO: Para el control de sesiones
 
 namespace ProyectoDiseño.Controllers
 {
     public class MovimientosController : Controller
     {
-        // Método privado auxiliar para verificar que existe una sesión activa
+        // Método auxiliar para comprobar la existencia de una sesión activa
         private bool UsuarioEstaAutenticado()
         {
             string rolUsuario = HttpContext.Session.GetString("UsuarioRol");
             return !string.IsNullOrEmpty(rolUsuario);
         }
 
+        // ==========================================
+        // SOLUCIÓN: ACCIÓN GET PARA RENDERIZAR LA VISTA
+        // ==========================================
+        // GET: Movimientos/RegistrarTransaccion
+        [HttpGet]
+        public IActionResult RegistrarTransaccion()
+        {
+            // 1. Control de acceso: Si no ha iniciado sesión, se le expulsa al Login
+            if (!UsuarioEstaAutenticado())
+            {
+                TempData["Error"] = "Debe iniciar sesión para acceder a este módulo.";
+                return RedirectToAction("Index", "Home");
+            }
+
+            // 2. Recuperar el catálogo de insumos activos para alimentar el <select> de la vista
+            var listaInsumos = new List<Insumo>();
+            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
+
+            try
+            {
+                using (conexion)
+                {
+                    conexion.Open();
+                    string query = "SELECT IdInsumo, Nombre, UnidadMedida, CantidadActual, StockMinimo FROM Insumo WHERE Activo = 1";
+                    using (SqlCommand cmd = new SqlCommand(query, conexion))
+                    {
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                listaInsumos.Add(new Insumo
+                                {
+                                    IdInsumo = reader.GetInt32(0),
+                                    Nombre = reader.GetString(1),
+                                    UnidadMedida = reader.GetString(2),
+                                    CantidadActual = reader.GetDecimal(3),
+                                    StockMinimo = reader.GetDecimal(4)
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // 3. Almacenar la lista en el ViewBag para que esté disponible en el archivo .cshtml
+                ViewBag.InsumosDisponibles = listaInsumos;
+                return View();
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = "Error al cargar los insumos para la transacción: " + ex.Message;
+                return RedirectToAction("Dashboard", "Home");
+            }
+        }
+
         // POST: Movimientos/RegistrarEgreso
         [HttpPost]
         public IActionResult RegistrarEgreso(int idInsumo, int idPersona, decimal cantidadARetirar, string tipoMovimiento)
         {
-            // SOLUCIÓN PUNTO 1: Validación de acceso para evitar operaciones de usuarios anónimos
+            // Control de acceso para peticiones POST
             if (!UsuarioEstaAutenticado())
             {
-                return RedirectToAction("Index", "Home"); // Expulsar al login si no hay sesión
+                return RedirectToAction("Index", "Home");
             }
 
             if (tipoMovimiento != "Consumo" && tipoMovimiento != "Merma" && tipoMovimiento != "Entrada")
@@ -111,7 +166,7 @@ namespace ProyectoDiseño.Controllers
                 }
             }
 
-            // CORRECCIÓN ADICIONAL: Se corrige el Error 404 apuntando correctamente al controlador "Home"
+            // Redirección segura al panel de control principal
             return RedirectToAction("Dashboard", "Home");
         }
     }

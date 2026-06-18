@@ -21,11 +21,11 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold text-secondary">Seleccionar Insumo / Ingrediente</label>
-                            <select name="idInsumo" class="form-select bg-white" required>
-                                <option value="" disabled selected>-- Elige un insumo disponible --</option>
-                                @foreach (var item in Model)
+                            <select name="idInsumo" class="form-control" required>
+                                <option value="">-- Seleccione un Insumo --</option>
+                                @foreach (var insumo in ViewBag.InsumosDisponibles)
                                 {
-                                    <option value="@item.IdInsumo">@item.Nombre (@item.CantidadActual @item.UnidadMedida disponibles)</option>
+                                    <option value="@insumo.IdInsumo">@insumo.Nombre (@insumo.UnidadMedida)</option>
                                 }
                             </select>
                         </div>
