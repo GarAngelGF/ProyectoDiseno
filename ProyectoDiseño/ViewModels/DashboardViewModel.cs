@@ -7,5 +7,6 @@ namespace ProyectoDiseño.ViewModels
     {
         public List<Insumo> InventarioCompleto { get; set; }
         public List<Insumo> AlertasStock { get; set; }
+        public List<MovimientoInventario> HistorialMovimientos { get; set; }
     }
 }
