@@ -3,35 +3,29 @@ using Microsoft.Data.SqlClient;
 using ProyectoDiseño.Patrones;
 using ProyectoDiseño.Models;
 using System;
-using System.Collections.Generic; // REQUERIDO: Para el manejo de listas de Insumos
-using Microsoft.AspNetCore.Http; // REQUERIDO: Para el control de sesiones
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Http; // REQUERIDO: Para acceder a HttpContext.Session
 
 namespace ProyectoDiseño.Controllers
 {
     public class MovimientosController : Controller
     {
-        // Método auxiliar para comprobar la existencia de una sesión activa
         private bool UsuarioEstaAutenticado()
         {
             string rolUsuario = HttpContext.Session.GetString("UsuarioRol");
             return !string.IsNullOrEmpty(rolUsuario);
         }
 
-        // ==========================================
-        // SOLUCIÓN: ACCIÓN GET PARA RENDERIZAR LA VISTA
-        // ==========================================
         // GET: Movimientos/RegistrarTransaccion
         [HttpGet]
         public IActionResult RegistrarTransaccion()
         {
-            // 1. Control de acceso: Si no ha iniciado sesión, se le expulsa al Login
             if (!UsuarioEstaAutenticado())
             {
                 TempData["Error"] = "Debe iniciar sesión para acceder a este módulo.";
                 return RedirectToAction("Index", "Home");
             }
 
-            // 2. Recuperar el catálogo de insumos activos para alimentar el <select> de la vista
             var listaInsumos = new List<Insumo>();
             SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
@@ -60,26 +54,41 @@ namespace ProyectoDiseño.Controllers
                     }
                 }
 
-                // 3. Almacenar la lista en el ViewBag para que esté disponible en el archivo .cshtml
                 ViewBag.InsumosDisponibles = listaInsumos;
                 return View();
             }
             catch (Exception ex)
             {
-                TempData["Error"] = "Error al cargar los insumos para la transacción: " + ex.Message;
+                TempData["Error"] = "Error al cargar los insumos: " + ex.Message;
                 return RedirectToAction("Dashboard", "Home");
             }
         }
 
         // POST: Movimientos/RegistrarEgreso
+        // SOLUCIÓN: Se eliminó 'int idPersona' de los parámetros de la solicitud externa
         [HttpPost]
-        public IActionResult RegistrarEgreso(int idInsumo, int idPersona, decimal cantidadARetirar, string tipoMovimiento)
+        public IActionResult RegistrarEgreso(int idInsumo, decimal cantidadARetirar, string tipoMovimiento)
         {
-            // Control de acceso para peticiones POST
+            // 1. CONTROL DE ACCESO GLOBAL
             if (!UsuarioEstaAutenticado())
             {
                 return RedirectToAction("Index", "Home");
             }
+
+            // =========================================================================
+            // 2. SOLUCIÓN: EXTRACCIÓN SEGURA DE LA IDENTIDAD DEL LADO DEL SERVIDOR
+            // =========================================================================
+            int? idPersonaLogueada = HttpContext.Session.GetInt32("UsuarioId");
+            
+            if (!idPersonaLogueada.HasValue)
+            {
+                TempData["Error"] = "Su sesión ha expirado o es inválida. Por favor, vuelva a autenticarse.";
+                return RedirectToAction("Index", "Home");
+            }
+
+            // Convertimos el valor seguro a tipo int para su uso en las consultas SQL
+            int idPersonaSegura = idPersonaLogueada.Value;
+            // =========================================================================
 
             if (tipoMovimiento != "Consumo" && tipoMovimiento != "Merma" && tipoMovimiento != "Entrada")
             {
@@ -145,12 +154,13 @@ namespace ProyectoDiseño.Controllers
                         cmdUpdate.ExecuteNonQuery();
                     }
 
+                    // 3. REGISTRO EN EL HISTORIAL USANDO LA VARIABLE DE SESIÓN SEGURA
                     string queryHistorial = @"INSERT INTO MovimientoInventario (IdInsumo, IdPersona, TipoMovimiento, Cantidad, FechaMovimiento) 
                                               VALUES (@IdInsumo, @IdPersona, @TipoMovimiento, @Cantidad, GETDATE())";
                     using (SqlCommand cmdHistorial = new SqlCommand(queryHistorial, conexion, transaccion))
                     {
                         cmdHistorial.Parameters.AddWithValue("@IdInsumo", idInsumo);
-                        cmdHistorial.Parameters.AddWithValue("@IdPersona", idPersona);
+                        cmdHistorial.Parameters.AddWithValue("@IdPersona", idPersonaSegura); // Asignación del valor de sesión validado
                         cmdHistorial.Parameters.AddWithValue("@TipoMovimiento", tipoMovimiento);
                         cmdHistorial.Parameters.AddWithValue("@Cantidad", cantidadARetirar);
                         cmdHistorial.ExecuteNonQuery();
@@ -166,7 +176,6 @@ namespace ProyectoDiseño.Controllers
                 }
             }
 
-            // Redirección segura al panel de control principal
             return RedirectToAction("Dashboard", "Home");
         }
     }
