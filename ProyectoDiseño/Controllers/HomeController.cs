@@ -5,17 +5,16 @@ using ProyectoDiseño.Patrones;
 using ProyectoDiseño.ViewModels;
 using System;
 using System.Collections.Generic;
-using Microsoft.AspNetCore.Http; // Manejo de sesiones
+using Microsoft.AspNetCore.Http;
 
 namespace ProyectoDiseño.Controllers
 {
     public class HomeController : Controller
     {
-        // GET: Home/Index (Pantalla de Inicio de Sesión)
+        // GET: Home/Index (Pantalla de Login)
         [HttpGet]
         public IActionResult Index()
         {
-            // Si el usuario ya está logueado, lo mandamos directo a su Dashboard
             if (!string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioRol")))
             {
                 return RedirectToAction("Dashboard");
@@ -23,16 +22,14 @@ namespace ProyectoDiseño.Controllers
             return View();
         }
 
-        // POST: Home/Login (Procesa el formulario contra la tabla Persona)
+        // POST: Home/Login
         [HttpPost]
         public IActionResult Login(string usuario, string contrasena)
         {
-            // CORRECCIÓN: Conexión centralizada única a través del Singleton
             SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
 
             try
             {
-                // Consulta segura para verificar las credenciales de la Persona
                 string query = @"SELECT IdPersona, NombreCompleto, Rol 
                                  FROM Persona 
                                  WHERE Usuario = @Usuario AND ContrasenaHash = @Contrasena AND Activo = 1";
@@ -46,7 +43,6 @@ namespace ProyectoDiseño.Controllers
                     {
                         if (reader.Read())
                         {
-                            // GUARDAR EN SESIÓN LOS DATOS DEL REGISTRO ENCONTRADO
                             HttpContext.Session.SetInt32("UsuarioId", reader.GetInt32(0));
                             HttpContext.Session.SetString("UsuarioNombre", reader.GetString(1));
                             HttpContext.Session.SetString("UsuarioRol", reader.GetString(2));
@@ -68,26 +64,28 @@ namespace ProyectoDiseño.Controllers
             }
         }
 
-        // GET: Home/Dashboard (Aplica restricciones de Rol en el Programa)
+        // GET: Home/Dashboard
         [HttpGet]
         public IActionResult Dashboard()
         {
             string rolUsuario = HttpContext.Session.GetString("UsuarioRol");
 
-            // Restricción: Si no ha iniciado sesión, se bloquea el acceso
             if (string.IsNullOrEmpty(rolUsuario))
             {
                 return RedirectToAction("Index");
             }
 
-            var inventario = ObtenerInventario(); var alertas = inventario.FindAll(i => i.CantidadActual < i.StockMinimo);
+            var inventario = ObtenerInventario();
+            var alertas = inventario.FindAll(i => i.CantidadActual < i.StockMinimo);
+
             var viewModel = new DashboardViewModel
             {
                 InventarioCompleto = inventario,
-                AlertasStock = alertas
+                AlertasStock = alertas,
+                // SOLUCIÓN PUNTO 2: Carga de movimientos históricos al ViewModel
+                HistorialMovimientos = ObtenerHistorialMovimientos()
             };
 
-            // CONTROL DE FLUJO Y RESTRICCIONES SEGÚN EL ROL DE LA TABLA PERSONA
             if (rolUsuario == "Cocina")
             {
                 return View("VistaCocina", viewModel);
@@ -103,7 +101,7 @@ namespace ProyectoDiseño.Controllers
         // GET: Home/Logout
         public IActionResult Logout()
         {
-            HttpContext.Session.Clear(); // Destruye la sesión activa
+            HttpContext.Session.Clear();
             return RedirectToAction("Index");
         }
 
@@ -126,6 +124,46 @@ namespace ProyectoDiseño.Controllers
                             UnidadMedida = reader.GetString(2),
                             CantidadActual = reader.GetDecimal(3),
                             StockMinimo = reader.GetDecimal(4)
+                        });
+                    }
+                }
+            }
+            return lista;
+        }
+
+        // =========================================================================
+        // SOLUCIÓN PUNTO 2: MÉTODOS AUXILIARES Y CONSULTA DE AUDITORÍA (JOIN)
+        // =========================================================================
+        private List<MovimientoInventario> ObtenerHistorialMovimientos()
+        {
+            var lista = new List<MovimientoInventario>();
+            SqlConnection conexion = DatabaseConnection.Instancia.ObtenerConexion();
+
+            // Consulta relacional con JOIN para traer los nombres descriptivos en lugar de solo los identificadores numéricos
+            string query = @"SELECT m.IdMovimiento, m.IdInsumo, i.Nombre, m.IdPersona, p.NombreCompleto, 
+                                    m.TipoMovimiento, m.Cantidad, m.FechaMovimiento, m.Observaciones
+                             FROM MovimientoInventario m
+                             INNER JOIN Insumo i ON m.IdInsumo = i.IdInsumo
+                             INNER JOIN Persona p ON m.IdPersona = p.IdPersona
+                             ORDER BY m.FechaMovimiento DESC";
+
+            using (SqlCommand cmd = new SqlCommand(query, conexion))
+            {
+                using (SqlDataReader reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        lista.Add(new MovimientoInventario
+                        {
+                            IdMovimiento = reader.GetInt32(0),
+                            IdInsumo = reader.GetInt32(1),
+                            NombreInsumo = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                            IdPersona = reader.GetInt32(3),
+                            NombrePersona = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                            TipoMovimiento = reader.GetString(5),
+                            Cantidad = reader.GetDecimal(6),
+                            FechaMovimiento = reader.GetDateTime(7),
+                            Observaciones = reader.IsDBNull(8) ? string.Empty : reader.GetString(8)
                         });
                     }
                 }
