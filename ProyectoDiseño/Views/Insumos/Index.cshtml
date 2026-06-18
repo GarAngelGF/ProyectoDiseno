@@ -1,46 +1,49 @@
 ﻿@model IEnumerable<ProyectoDiseño.Models.Insumo>
 
 @{
-    ViewData["Title"] = "Catálogo de Insumos";
+    ViewData["Title"] = "Catálogo de Insumos - El Jardín";
 }
 
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" class="bi bi-journal-text me-2" viewBox="0 0 16 16">
-                <path d="M5 10.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5zm0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z" />
-                <path d="M3 0h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-1h1v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v1H1V2a2 2 0 0 1 2-2z" />
-                <path d="M1 5v-.5a.5.5 0 0 1 1 0V5h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1H1zm0 3v-.5a.5.5 0 0 1 1 0V8h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1H1zm0 3v-.5a.5.5 0 0 1 1 0v.5h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1H1z" />
-            </svg>
-            Catálogo Completo de Insumos
-        </h2>
+        <h1>Catálogo General de Insumos</h1>
         <div>
-            <a asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary shadow-sm me-2">
-                Ir al Dashboard
-            </a>
-            <a asp-action="Crear" class="btn btn-primary shadow-sm">
-                + Nuevo Insumo
-            </a>
+            <a asp-controller="Home" asp-action="Dashboard" class="btn btn-outline-secondary me-2">Volver al Dashboard</a>
+            <a asp-controller="Insumos" asp-action="Crear" class="btn btn-success"><i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Insumo</a>
         </div>
     </div>
 
-    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
-        <i class="bi bi-check-circle-fill me-2"></i> Operación realizada correctamente. El catálogo está actualizado.
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
+    @if (TempData["Exito"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> @TempData["Exito"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
 
-    <div class="card shadow-sm border-0">
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="card border-secondary shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h5 class="card-title mb-0"><i class="bi bi-list-task me-2"></i>Insumos Registrados</h5>
+        </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-striped table-hover mb-0 align-middle">
-                    <thead class="table-dark">
+                <table class="table table-striped table-hover align-middle mb-0">
+                    <thead class="table-light">
                         <tr>
-                            <th class="text-center">ID</th>
-                            <th>Nombre del Producto</th>
-                            <th>Unidad</th>
-                            <th class="text-center">Existencia</th>
-                            <th class="text-center">Stock Mínimo</th>
-                            <th class="text-center">Acciones</th>
+                            <th>ID</th>
+                            <th>Nombre del Insumo</th>
+                            <th>Unidad de Medida</th>
+                            <th>Cantidad Actual</th>
+                            <th>Stock Mínimo</th>
+                            <th class="text-center" style="min-width: 380px;">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -48,15 +51,40 @@
                         {
                             @foreach (var item in Model)
                             {
+                                bool bajoStock = item.CantidadActual < item.StockMinimo;
                                 <tr>
-                                    <td class="text-center">@item.IdInsumo</td>
-                                    <td class="fw-bold text-primary">@item.Nombre</td>
+                                    <td>@item.IdInsumo</td>
+                                    <td class="fw-bold">@item.Nombre</td>
                                     <td>@item.UnidadMedida</td>
-                                    <td class="text-center">@item.CantidadActual</td>
-                                    <td class="text-center">@item.StockMinimo</td>
+                                    <td>
+                                        <span class="badge @(bajoStock ? "bg-danger" : "bg-success")">
+                                            @item.CantidadActual
+                                        </span>
+                                    </td>
+                                    <td>@item.StockMinimo</td>
                                     <td class="text-center">
-                                        <button class="btn btn-sm btn-outline-dark" title="Editar">Editar</button>
-                                        <button class="btn btn-sm btn-outline-danger" title="Dar de baja">Eliminar</button>
+                                        <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
+
+                                            <a asp-controller="Insumos" asp-action="Editar" asp-route-id="@item.IdInsumo" class="btn btn-warning btn-sm">
+                                                <i class="bi bi-pencil-square"></i> Editar
+                                            </a>
+
+                                            <a asp-controller="Insumos" asp-action="Eliminar" asp-route-id="@item.IdInsumo" class="btn btn-danger btn-sm">
+                                                <i class="bi bi-trash"></i> Eliminar
+                                            </a>
+
+                                            <form asp-controller="Insumos" asp-action="ClonarInsumo" method="post" class="d-inline-flex align-items-center border p-1 rounded bg-light shadow-sm">
+                                                <input type="hidden" name="idInsumoBase" value="@item.IdInsumo" />
+
+                                                <input type="text" name="nuevoNombre" placeholder="Nombre clon" class="form-control form-control-sm me-1" required style="max-width: 120px;" />
+                                                <input type="number" name="nuevaCantidad" placeholder="Cant." class="form-control form-control-sm me-1" required min="0" step="0.01" style="max-width: 65px;" />
+
+                                                <button type="submit" class="btn btn-info btn-sm text-white">
+                                                    <i class="bi bi-files"></i> Clonar
+                                                </button>
+                                            </form>
+
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -64,7 +92,7 @@
                         else
                         {
                             <tr>
-                                <td colspan="6" class="text-center py-4 text-muted">No hay insumos registrados en el catálogo.</td>
+                                <td colspan="6" class="text-center text-muted py-4">No se encontraron insumos cargados en el catálogo.</td>
                             </tr>
                         }
                     </tbody>
